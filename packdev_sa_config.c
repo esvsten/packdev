@@ -38,6 +38,8 @@ static void add_sa_session(uint32_t sa_id) {
     cipher.cipher.algo = sas[sa_id].config.encr_algorithm;
     cipher.cipher.key.data = sas[sa_id].config.encr_key;
     cipher.cipher.key.length = 16;
+    cipher.cipher.iv.offset = SYM_IV_OFFSET;
+    cipher.cipher.iv.length = sas[sa_id].config.iv_length;
     cipher.cipher.op = RTE_CRYPTO_CIPHER_OP_DECRYPT;
     cipher.next = NULL;
 
@@ -53,10 +55,22 @@ static void add_sa_session(uint32_t sa_id) {
     // for encryption, first perform auth, then decryption
     init_xform = &auth;
 
+    /* Create crypto session and initialize it for the crypto device. */
     packdev_crypto_dev_t* crypto_dev = packdev_crypto_get_device();
-    sas[sa_id].session = rte_cryptodev_sym_session_create(
-            crypto_dev->id,
-            init_xform);
+    sas[sa_id].session= rte_cryptodev_sym_session_create(crypto_dev->session_pool);
+    if (sas[sa_id].session == NULL) {
+        rte_exit(EXIT_FAILURE,
+                "SA: Symmetric session could not be created\n");
+    }
+
+    if (rte_cryptodev_sym_session_init(
+                crypto_dev->id,
+                sas[sa_id].session,
+                init_xform,
+                crypto_dev->session_pool) < 0) {
+        rte_exit(EXIT_FAILURE,
+                "SA: Session could not be initialized\n");
+    }
 
     uint32_t key = rte_jhash(&sas[sa_id].attr, sizeof(sas[sa_id].attr), SA_TABLE_IV);
     rte_hash_add_key_data(

@@ -92,21 +92,22 @@ static void esp_downlink_process(
         sizeof(struct ipv4_hdr) -
         sa->config.digest_length;
 
-    struct rte_crypto_sym_op *sym = (struct rte_crypto_sym_op *)(crypto_op + 1);
     uint32_t inner_hdr_offset =
         sizeof(struct ether_hdr) + sizeof(struct ipv4_hdr) +
         sizeof(struct esp_hdr) + sa->config.iv_length;
-    sym->cipher.data.length = protected_data_length;
-    sym->cipher.data.offset = inner_hdr_offset;
+    crypto_op->sym->cipher.data.length = protected_data_length;
+    crypto_op->sym->cipher.data.offset = inner_hdr_offset;
 
-    crypto_op->sym->cipher.iv.length = sa->config.iv_length;
-    crypto_op->sym->cipher.iv.data = MBUF_IPV4_ESP_IV_OFFSET(packet);
-    crypto_op->sym->cipher.iv.phys_addr = MBUF_IPV4_ESP_IV_PHY_OFFSET(packet);
+    uint8_t *packet_iv = (uint8_t*)MBUF_IPV4_ESP_IV_OFFSET(packet);
+    uint8_t *crypto_iv = rte_crypto_op_ctod_offset(
+            crypto_op,
+            uint8_t*,
+            SYM_IV_OFFSET);
+    rte_memcpy(crypto_iv, packet_iv, sa->config.iv_length);
 
-    sym->auth.data.length = authenticated_data_length;
-    sym->auth.data.offset = sizeof(struct ether_hdr) + sizeof(struct ipv4_hdr);
+    crypto_op->sym->auth.data.length = authenticated_data_length;
+    crypto_op->sym->auth.data.offset = sizeof(struct ether_hdr) + sizeof(struct ipv4_hdr);
 
-    sym->auth.digest.length = sa->config.digest_length;
     crypto_op->sym->auth.digest.data = MBUF_IPV4_ESP_DIGEST_OFFSET(packet, sa->config.digest_length);
     crypto_op->sym->auth.digest.phys_addr = MBUF_IPV4_ESP_DIGEST_PHY_OFFSET(packet, sa->config.digest_length);
 
@@ -115,26 +116,30 @@ static void esp_downlink_process(
             rte_pktmbuf_mtod_offset(
                 packet,
                 uint8_t*,
-                sym->cipher.data.offset),
-            sym->cipher.data.length);
+                crypto_op->sym->cipher.data.offset),
+            crypto_op->sym->cipher.data.length);
 
-    rte_hexdump(stdout, "Cipher IV:",
-            sym->cipher.iv.data,
-            sym->cipher.iv.length);
+    rte_hexdump(stdout, "Cipher IV(packet):",
+            packet_iv,
+            sa->config.iv_length);
+
+    rte_hexdump(stdout, "Cipher IV(crypto op):",
+            crypto_iv,
+            sa->config.iv_length);
 
     rte_hexdump(stdout, "Auth data:",
             rte_pktmbuf_mtod_offset(
                 packet,
                 uint8_t*,
-                sym->auth.data.offset),
-            sym->auth.data.length);
+                crypto_op->sym->auth.data.offset),
+            crypto_op->sym->auth.data.length);
 
     rte_hexdump(stdout, "Auth digest:",
-            sym->auth.digest.data,
-            sym->auth.digest.length);
+            crypto_op->sym->auth.digest.data,
+            sa->config.digest_length);
 #endif
 
-    sym->m_src = packet;
+    crypto_op->sym->m_src = packet;
 
     uint16_t enq_result = rte_cryptodev_enqueue_burst(
             crypto_dev->id,

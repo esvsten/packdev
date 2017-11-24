@@ -66,8 +66,11 @@ struct esp_hdr {
 };
 
 #define OFF_ETH_HDR    (sizeof(struct ether_hdr))
+#define OFF_VLAN_HDR   (sizeof(struct vlan_hdr))
 #define OFF_IPV4_HDR   (sizeof(struct ipv4_hdr))
 #define OFF_ESP_HDR   (sizeof(struct esp_hdr))
+#define MBUF_VLAN_HDR_OFFSET(m)   \
+    rte_pktmbuf_mtod_offset((m), uint8_t *, OFF_ETH_HDR)
 #define MBUF_IP_HDR_OFFSET(m)   \
     rte_pktmbuf_mtod_offset((m), uint8_t *, OFF_ETH_HDR)
 #define MBUF_IPV4_UDP_HDR_OFFSET(m)   \

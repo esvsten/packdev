@@ -18,11 +18,12 @@
 #include <rte_ether.h>
 #include <rte_debug.h>
 
-#include <packdev_common.h>
-#include <packdev_packet.h>
-#include <packdev_port.h>
-#include <packdev_eth.h>
-#include <packdev_ipv4.h>
+#include "packdev_common.h"
+#include "packdev_packet.h"
+#include "packdev_port.h"
+#include "packdev_eth.h"
+#include "packdev_vlan.h"
+#include "packdev_ipv4.h"
 
 static void packdev_packet_classify(
         struct rte_mbuf *packet,
@@ -33,6 +34,10 @@ static void packdev_packet_classify(
     uint16_t ether_type = packdev_eth_get_type(packet);
 
     switch (ether_type) {
+    case ETHER_TYPE_VLAN:
+        /* Frees the mbuf */
+        packdev_vlan_process(packet, port_id);
+        break;
     case ETHER_TYPE_IPv4:
         /* Frees the mbuf */
         packdev_ipv4_process(packet, port_id, false /*inner packet (false) */);

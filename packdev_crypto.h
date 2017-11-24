@@ -8,6 +8,7 @@ typedef struct {
     uint8_t id;
     uint16_t qp_id;
     struct rte_mempool *operation_pool;
+    struct rte_mempool *session_pool;
 } packdev_crypto_dev_t;
 
 void packdev_crypto_init();

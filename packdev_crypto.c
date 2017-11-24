@@ -30,16 +30,34 @@ void packdev_crypto_init() {
     uint8_t socket_id = rte_socket_id();
 
     /* Create the virtual crypto device. */
-    const char *crypto_name = RTE_STR(CRYPTODEV_NAME_OPENSSL_PMD)"0";
+    const char *crypto_name = "crypto_openssl0";
     char crypto_vdev_args[128];
     snprintf(crypto_vdev_args,
             sizeof(crypto_vdev_args),
             "socket_id=%d", socket_id);
     if (rte_vdev_init(crypto_name, crypto_vdev_args) != 0) {
-        rte_exit(EXIT_FAILURE, "CRYPTO: Cannot create crypto device");
+        rte_exit(EXIT_FAILURE, "CRYPTO: Cannot create crypto device\n");
     }
 
     global_crypto_dev.id = rte_cryptodev_get_dev_id(crypto_name);
+
+    /* Get private session data size. */
+    uint32_t session_size =
+        rte_cryptodev_get_private_session_size(global_crypto_dev.id);
+
+    /*
+     * Create session mempool, with two objects per session,
+     * one for the session header and another one for the
+     * private session data for the crypto device.
+     */
+    global_crypto_dev.session_pool = rte_mempool_create(
+            "session_pool",
+            MAX_NUM_CRYPTO_SESSIONS * 2,
+            session_size,
+            CRYPTO_CACHE_SIZE,
+            0, NULL, NULL, NULL,
+            NULL, socket_id,
+            0);
 
     /*
      * The IV is always placed after the crypto operation,
@@ -63,10 +81,6 @@ void packdev_crypto_init() {
     struct rte_cryptodev_config cryptodev_config = {
         .nb_queue_pairs = 1,
         .socket_id = socket_id,
-        .session_mp = {
-            .nb_objs = MAX_NUM_CRYPTO_SESSIONS * 2,
-            .cache_size = CRYPTO_CACHE_SIZE,
-        },
     };
 
     struct rte_cryptodev_qp_conf queue_pair_config = {
@@ -75,7 +89,7 @@ void packdev_crypto_init() {
 
     if (rte_cryptodev_configure(global_crypto_dev.id, &cryptodev_config) < 0) {
         rte_exit(EXIT_FAILURE,
-                "CRYPTO: Failed to configure cryptodev %u", global_crypto_dev.id);
+                "CRYPTO: Failed to configure cryptodev %u\n", global_crypto_dev.id);
     }
 
     global_crypto_dev.qp_id = 0;
@@ -83,7 +97,8 @@ void packdev_crypto_init() {
                 global_crypto_dev.id,
                 global_crypto_dev.qp_id,
                 &queue_pair_config,
-                socket_id) < 0) {
+                socket_id,
+                global_crypto_dev.session_pool) < 0) {
         rte_exit(EXIT_FAILURE, "CRYPTO: Failed to setup queue pair\n");
     }
 
