@@ -8,6 +8,7 @@
 
 
 enum {
+    DEFAULT_MBUF_PRIV_SIZE  = 32,
     DEFAULT_PKT_BURST       = 32,
 
     /* Following comment copied from rte_mempool.h
@@ -65,29 +66,40 @@ struct esp_hdr {
     /* Integrity Check Value - ICV */
 };
 
+typedef enum {
+    PACKDEV_ORIGIN_NIC,
+    PACKDEV_ORIGIN_VETH,
+    PACKDEV_ORIGIN_FP,
+    PACKDEV_ORIGIN_MAX
+} packdev_packet_origin_t;
+
+typedef struct {
+    uint16_t origin;
+    uint16_t inner_packet;
+} packdev_metadata_t;
+
+#define PACKDEV_METADATA_PTR(packet) \
+    ((packdev_metadata_t*) ((uintptr_t) packet + sizeof(struct rte_mbuf)))
+
 #define OFF_ETH_HDR    (sizeof(struct ether_hdr))
 #define OFF_VLAN_HDR   (sizeof(struct vlan_hdr))
 #define OFF_IPV4_HDR   (sizeof(struct ipv4_hdr))
 #define OFF_ESP_HDR   (sizeof(struct esp_hdr))
-#define MBUF_VLAN_HDR_OFFSET(m)   \
-    rte_pktmbuf_mtod_offset((m), uint8_t *, OFF_ETH_HDR)
-#define MBUF_IP_HDR_OFFSET(m)   \
-    rte_pktmbuf_mtod_offset((m), uint8_t *, OFF_ETH_HDR)
-#define MBUF_IPV4_UDP_HDR_OFFSET(m)   \
-    rte_pktmbuf_mtod_offset((m), uint8_t *, OFF_ETH_HDR + OFF_IPV4_HDR)
-#define MBUF_IPV4_ESP_HDR_OFFSET(m)   \
-    rte_pktmbuf_mtod_offset((m), uint8_t *, OFF_ETH_HDR + OFF_IPV4_HDR)
-
-#define MBUF_INNER_IP_HDR_OFFSET(m)   \
-    rte_pktmbuf_mtod_offset((m), uint8_t *, 0)
-#define MBUF_INNER_IPV4_UDP_HDR_OFFSET(m)   \
-    rte_pktmbuf_mtod_offset((m), uint8_t *, OFF_IPV4_HDR)
-
+#define MBUF_ETH_HDR_PTR(m) \
+    rte_pktmbuf_mtod((m), struct ether_hdr*)
+#define MBUF_VLAN_HDR_PTR(m) \
+    rte_pktmbuf_mtod((m), struct vlan_hdr*)
+#define MBUF_IPV4_HDR_PTR(m) \
+    rte_pktmbuf_mtod((m), struct ipv4_hdr*)
+#define MBUF_IPV4_UDP_HDR_PTR(m) \
+    rte_pktmbuf_mtod_offset((m), struct udp_hdr*, OFF_IPV4_HDR)
+#define MBUF_IPV4_ESP_HDR_PTR(m) \
+    rte_pktmbuf_mtod_offset((m), struct esp_hdr*, OFF_IPV4_HDR)
 
 #define MBUF_IPV4_ESP_DATA_OFFSET(m, len)   \
-    rte_pktmbuf_mtod_offset((m), uint8_t *, OFF_ETH_HDR + OFF_IPV4_HDR + OFF_ESP_HDR + len)
+    rte_pktmbuf_mtod_offset((m), uint8_t *, OFF_IPV4_HDR + OFF_ESP_HDR + len)
 #define MBUF_IPV4_ESP_DATA_PHY_OFFSET(m, len)   \
-    rte_pktmbuf_mtophys_offset((m), OFF_ETH_HDR + OFF_IPV4_HDR + OFF_ESP_HDR + len)
+    rte_pktmbuf_mtophys_offset((m), OFF_IPV4_HDR + OFF_ESP_HDR + len)
 
 #define MBUF_IPV4_ESP_IV_OFFSET(m) MBUF_IPV4_ESP_DATA_OFFSET(m, 0)
 #define MBUF_IPV4_ESP_IV_PHY_OFFSET(m) MBUF_IPV4_ESP_DATA_PHY_OFFSET(m, 0)

@@ -5,8 +5,6 @@
 
 #include "packdev_session.h"
 
-void packdev_udp_process(
-        struct rte_mbuf *packet,
-        uint16_t port_id);
+void packdev_udp_process(struct rte_mbuf *packet);
 
 #endif /* PACKDEV_UDP_H_ */

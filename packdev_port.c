@@ -70,7 +70,7 @@ static inline int port_init(uint8_t port_id)
                 rx_queue_mempool_name,
                 port->num_rx_mbufs,
                 MBUF_RX_CACHE_SIZE,
-                0, /* priv size */
+                DEFAULT_MBUF_PRIV_SIZE,
                 RTE_MBUF_DEFAULT_BUF_SIZE,
                 rte_socket_id());
         if (port->rx_queue[queue_id].mempool == NULL) {
@@ -138,7 +138,7 @@ void packdev_port_init()
             "tx_mp",
             MAX_TX_MBUFS,
             MBUF_TX_CACHE_SIZE,
-            0, /* priv size */
+            DEFAULT_MBUF_PRIV_SIZE,
             RTE_MBUF_DEFAULT_BUF_SIZE,
             rte_socket_id());
     if (tx_mp == NULL) {
@@ -168,6 +168,10 @@ packdev_port_t* packdev_port_get(uint32_t port_id) {
     }
 
     return NULL;
+}
+
+struct rte_mempool* packdev_port_get_tx_mp() {
+    return tx_mp;
 }
 
 void packdev_port_mac_addr_print(uint32_t port_id) {

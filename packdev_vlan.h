@@ -6,8 +6,6 @@
 
 #include <rte_ether.h>
 
-void packdev_vlan_process(
-        struct rte_mbuf *packet,
-        uint16_t port_id);
+void packdev_vlan_process(struct rte_mbuf *packet);
 
 # endif // PACKDEV_VLAN_H_

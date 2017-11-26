@@ -24,15 +24,14 @@
 
 #include "packdev_vlan.h"
 
-void packdev_vlan_process(
-        struct rte_mbuf *packet,
-        uint16_t port_id) {
-    struct vlan_hdr *vlan_hdr = (struct vlan_hdr *)MBUF_VLAN_HDR_OFFSET(packet);
+void packdev_vlan_process(struct rte_mbuf *packet) {
+    struct vlan_hdr *vlan_hdr = MBUF_VLAN_HDR_PTR(packet);
     RTE_LOG(DEBUG, USER1, "VLAN: Received packet with tag: %u\n",
             rte_bswap16(vlan_hdr->vlan_tci));
 
-    if (rte_bswap16(vlan_hdr->eth_proto) != ETHER_TYPE_IPv4) {
-        RTE_LOG(ERR, USER1, "VLAN: Unknown ether type: %u\n", vlan_hdr->eth_proto);
+    uint16_t ether_type = rte_bswap16(vlan_hdr->eth_proto);
+    if (ether_type != ETHER_TYPE_IPv4) {
+        RTE_LOG(ERR, USER1, "VLAN: Unknown ether type: %u\n", ether_type);
         goto clean_up;
     }
 
@@ -41,7 +40,7 @@ void packdev_vlan_process(
         goto clean_up;
     }
 
-    packdev_ipv4_process(packet, port_id, false /* inner packet */);
+    packdev_ipv4_process(packet);
 
 clean_up:
     rte_pktmbuf_free(packet);

@@ -18,6 +18,7 @@
 #include <rte_common.h>
 
 #include "packdev_common.h"
+#include "packdev_eth.h"
 #include "packdev_acl.h"
 #include "packdev_session.h"
 #include "packdev_packet.h"
@@ -62,11 +63,9 @@ static uint32_t udp_session_lookup(
     return 0;
 }
 
-void packdev_udp_process(
-        struct rte_mbuf *packet,
-        uint16_t port_id) {
-    struct ipv4_hdr *ipv4_hdr = (struct ipv4_hdr*)MBUF_IP_HDR_OFFSET(packet);
-    struct udp_hdr *udp_hdr = (struct udp_hdr*)MBUF_IPV4_UDP_HDR_OFFSET(packet);
+void packdev_udp_process(struct rte_mbuf *packet) {
+    struct ipv4_hdr *ipv4_hdr = MBUF_IPV4_HDR_PTR(packet);
+    struct udp_hdr *udp_hdr = MBUF_IPV4_UDP_HDR_PTR(packet);
     uint32_t session_id = udp_session_lookup(
             rte_bswap32(ipv4_hdr->src_addr),
             rte_bswap32(ipv4_hdr->dst_addr),
@@ -79,7 +78,6 @@ void packdev_udp_process(
         return;
     }
 
-    // TODO: QUEUEID: fix lcore id to rx/tx queue id
     RTE_LOG(INFO, USER1, "UDP session found (%u)\n", session_id);
-    packdev_packet_send(packet, port_id, 0);
+    packdev_eth_build(packet);
 }

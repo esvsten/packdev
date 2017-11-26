@@ -6,10 +6,7 @@
 
 #include <rte_ip.h>
 
-void packdev_ipv4_process(
-        struct rte_mbuf *packet,
-        uint16_t port_id,
-        bool inner_packet);
+void packdev_ipv4_process(struct rte_mbuf *packet);
 
 void packdev_ipv4_print_addr(uint32_t addr);
 

@@ -37,6 +37,8 @@ void packdev_port_destroy();
 
 packdev_port_t* packdev_port_get(uint32_t port_id);
 
+struct rte_mempool* packdev_port_get_tx_mp();
+
 void packdev_port_mac_addr_print(uint32_t port_id);
 
 #endif // PACKDEV_PORT_H_

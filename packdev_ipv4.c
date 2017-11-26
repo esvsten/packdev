@@ -45,7 +45,7 @@ static bool is_checksum_correct(struct ipv4_hdr *ipv4_hdr) {
 static struct rte_mbuf* fragment_process(
         struct rte_mbuf *packet,
         uint64_t current_timestamp) {
-    struct ipv4_hdr *ipv4_hdr = (struct ipv4_hdr*)MBUF_IP_HDR_OFFSET(packet);
+    struct ipv4_hdr *ipv4_hdr = MBUF_IPV4_HDR_PTR(packet);
     if (rte_ipv4_frag_pkt_is_fragmented(ipv4_hdr) == 0) {
         RTE_LOG(DEBUG, USER1, "IPv4 packet is not fragmented\n");
         return packet;
@@ -54,7 +54,7 @@ static struct rte_mbuf* fragment_process(
     RTE_LOG(DEBUG, USER1, "IPv4 packet is fragmented\n");
     struct rte_mbuf *reassembled_packet;
     /* prepare mbuf: setup l2_len/l3_len. */
-    packet->l2_len = sizeof(struct ether_hdr);
+    packet->l2_len = 0;
     packet->l3_len = sizeof(struct ipv4_hdr);
     /* process this fragment. */
     reassembled_packet = rte_ipv4_frag_reassemble_packet(
@@ -78,17 +78,9 @@ static struct rte_mbuf* fragment_process(
     return NULL;
 }
 
-static void ipv4_downlink_process(
-        struct rte_mbuf *packet,
-        uint16_t port_id,
-        bool inner_packet) {
+static void ipv4_downlink_process(struct rte_mbuf *packet) {
     uint64_t current_timestamp = rte_rdtsc();
-    struct ipv4_hdr *ipv4_hdr;
-    if (inner_packet) {
-        ipv4_hdr = (struct ipv4_hdr*)MBUF_INNER_IP_HDR_OFFSET(packet);
-    } else {
-        ipv4_hdr = (struct ipv4_hdr*)MBUF_IP_HDR_OFFSET(packet);
-    }
+    struct ipv4_hdr *ipv4_hdr = MBUF_IPV4_HDR_PTR(packet);
     RTE_LOG(DEBUG, USER1, "IPv4 packet received!\n");
     RTE_LOG(DEBUG, USER1, "IPv4 src address\n");
     packdev_ipv4_print_addr(rte_bswap32(ipv4_hdr->src_addr));
@@ -102,7 +94,8 @@ static void ipv4_downlink_process(
     }
 
     // TODO: No reassembly on inner packets yet.
-    if (inner_packet == false &&
+    packdev_metadata_t *metadata = PACKDEV_METADATA_PTR(packet);
+    if (metadata->inner_packet == false &&
             (packet = fragment_process(packet, current_timestamp)) == NULL) {
         RTE_LOG(DEBUG, USER1, "IPv4 reassembly not completed yet\n");
         return;
@@ -111,20 +104,19 @@ static void ipv4_downlink_process(
     switch(ipv4_hdr->next_proto_id) {
     case IPPROTO_UDP:
         RTE_LOG(INFO, USER1, "UDP packet received!\n");
-        packdev_udp_process(packet, port_id);
+        packdev_udp_process(packet);
         break;
     case IPPROTO_ICMP:
         RTE_LOG(INFO, USER1, "ICMP packet received!\n");
-        // TODO: QUEUEID: fix lcore id to rx/tx queue id
-        packdev_packet_send(packet, port_id, 0);
+        packdev_eth_build(packet);
         break;
     case IPPROTO_ESP:
         RTE_LOG(INFO, USER1, "ESP packet received!\n");
-        if (inner_packet) {
+        if (metadata->inner_packet) {
             RTE_LOG(INFO, USER1, "ESP inside ESP received, dropping packet!\n");
             rte_pktmbuf_free(packet);
         } else {
-            packdev_esp_process(packet, port_id);
+            packdev_esp_process(packet);
         }
         break;
     default:
@@ -134,15 +126,11 @@ static void ipv4_downlink_process(
     };
 }
 
-void packdev_ipv4_process(
-        struct rte_mbuf *packet,
-        uint16_t port_id,
-        bool inner_packet) {
-    (void)port_id;
-
+void packdev_ipv4_process(struct rte_mbuf *packet) {
     // No ACL on inner packet
-    if (inner_packet) {
-        ipv4_downlink_process(packet, port_id, inner_packet);
+    packdev_metadata_t *metadata = PACKDEV_METADATA_PTR(packet);
+    if (metadata->inner_packet) {
+        ipv4_downlink_process(packet);
         return;
     }
 
@@ -153,7 +141,7 @@ void packdev_ipv4_process(
     case PACKDEV_ACL_NO_MATCH:
         RTE_LOG(INFO, USER1, "No match found, allowing packet to bypass ACL\n");
     case PACKDEV_ACL_ACCEPT:
-        ipv4_downlink_process(packet, port_id, inner_packet);
+        ipv4_downlink_process(packet);
         break;
     case PACKDEV_ACL_DENY:
     default:

@@ -3,8 +3,6 @@
 
 #include <rte_mbuf.h>
 
-void packdev_esp_process(
-        struct rte_mbuf *packet,
-        uint16_t port_id);
+void packdev_esp_process(struct rte_mbuf *packet);
 
 #endif /* PACKDEV_ESP_H_ */

@@ -60,7 +60,7 @@ static __attribute__((noreturn)) void packdev_lcore_main_loop(uint8_t lcore_id) 
     // init control plane modules
     packdev_acl_config_init();
     packdev_spd_config_init(); /* only initialize after ACL */
-    packdev_sa_config_init(); /* only initialize after ACL */
+    packdev_sa_config_init();
     packdev_session_init();
 
     for (uint8_t port_id = 0; port_id < num_ports; port_id++) {

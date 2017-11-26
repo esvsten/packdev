@@ -8,6 +8,7 @@
  */
 
 #include <sys/types.h>
+#include <stdbool.h>
 #include <assert.h>
 
 #include <rte_eal.h>
@@ -22,32 +23,19 @@
 #include "packdev_packet.h"
 #include "packdev_port.h"
 #include "packdev_eth.h"
-#include "packdev_vlan.h"
-#include "packdev_ipv4.h"
 
 static void packdev_packet_classify(
         struct rte_mbuf *packet,
         uint16_t port_id) {
+    //RTE_LOG(DEBUG, USER1, "PACKET: new packet received on port(%u)\n", port_id);
     packdev_port_t *port_data = packdev_port_get(port_id);
     assert(port_data != NULL);
 
-    uint16_t ether_type = packdev_eth_get_type(packet);
+    packdev_metadata_t *metadata = PACKDEV_METADATA_PTR(packet);
+    metadata->origin = PACKDEV_ORIGIN_NIC;
+    metadata->inner_packet = false;
 
-    switch (ether_type) {
-    case ETHER_TYPE_VLAN:
-        /* Frees the mbuf */
-        packdev_vlan_process(packet, port_id);
-        break;
-    case ETHER_TYPE_IPv4:
-        /* Frees the mbuf */
-        packdev_ipv4_process(packet, port_id, false /*inner packet (false) */);
-        break;
-    default:
-        RTE_LOG(INFO, USER1, "Unknown ether type: %u\n", ether_type);
-        RTE_LOG(INFO, USER1, "Do not know how to handle ether type: %u\n", ether_type);
-        rte_pktmbuf_free(packet);
-        break;
-    }
+    packdev_eth_process(packet);
 }
 
 static void packdev_packet_classify_bulk(
@@ -55,10 +43,6 @@ static void packdev_packet_classify_bulk(
         uint16_t num_pkts,
         uint16_t port_id) {
     for (uint16_t i = 0 ; i < num_pkts; i++) {
-        struct ether_hdr *eth_hdr = packdev_eth_get_hdr(pkts[i]);
-        packdev_eth_print_addr(eth_hdr->s_addr);
-        packdev_eth_print_addr(eth_hdr->d_addr);
-
         packdev_packet_classify(pkts[i], port_id);
     }
 }

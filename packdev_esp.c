@@ -67,8 +67,7 @@ static packdev_sa_t* spi_lookup(
 
 static void esp_downlink_process(
         struct rte_mbuf *packet,
-        packdev_sa_t *sa,
-        uint16_t port_id) {
+        packdev_sa_t *sa) {
     packdev_crypto_dev_t *crypto_dev = packdev_crypto_get_device();
     uint16_t num_crypto_ops = 1;
     struct rte_crypto_op *crypto_op = rte_crypto_op_alloc(
@@ -80,21 +79,20 @@ static void esp_downlink_process(
 
     uint16_t protected_data_length =
         rte_pktmbuf_pkt_len(packet) -
-        sizeof(struct ether_hdr) -
         sizeof(struct ipv4_hdr) -
         sizeof(struct esp_hdr) -
-        sa->config.iv_length -
-        sa->config.digest_length;
+        sa->iv_length -
+        sa->digest_length;
 
     uint16_t authenticated_data_length =
         rte_pktmbuf_pkt_len(packet) -
-        sizeof(struct ether_hdr) -
         sizeof(struct ipv4_hdr) -
-        sa->config.digest_length;
+        sa->digest_length;
 
     uint32_t inner_hdr_offset =
-        sizeof(struct ether_hdr) + sizeof(struct ipv4_hdr) +
-        sizeof(struct esp_hdr) + sa->config.iv_length;
+        sizeof(struct ipv4_hdr) +
+        sizeof(struct esp_hdr) +
+        sa->iv_length;
     crypto_op->sym->cipher.data.length = protected_data_length;
     crypto_op->sym->cipher.data.offset = inner_hdr_offset;
 
@@ -103,13 +101,13 @@ static void esp_downlink_process(
             crypto_op,
             uint8_t*,
             SYM_IV_OFFSET);
-    rte_memcpy(crypto_iv, packet_iv, sa->config.iv_length);
+    rte_memcpy(crypto_iv, packet_iv, sa->iv_length);
 
     crypto_op->sym->auth.data.length = authenticated_data_length;
-    crypto_op->sym->auth.data.offset = sizeof(struct ether_hdr) + sizeof(struct ipv4_hdr);
+    crypto_op->sym->auth.data.offset = sizeof(struct ipv4_hdr);
 
-    crypto_op->sym->auth.digest.data = MBUF_IPV4_ESP_DIGEST_OFFSET(packet, sa->config.digest_length);
-    crypto_op->sym->auth.digest.phys_addr = MBUF_IPV4_ESP_DIGEST_PHY_OFFSET(packet, sa->config.digest_length);
+    crypto_op->sym->auth.digest.data = MBUF_IPV4_ESP_DIGEST_OFFSET(packet, sa->digest_length);
+    crypto_op->sym->auth.digest.phys_addr = MBUF_IPV4_ESP_DIGEST_PHY_OFFSET(packet, sa->digest_length);
 
 #if 0
     rte_hexdump(stdout, "Cipher data:",
@@ -121,11 +119,11 @@ static void esp_downlink_process(
 
     rte_hexdump(stdout, "Cipher IV(packet):",
             packet_iv,
-            sa->config.iv_length);
+            sa->iv_length);
 
     rte_hexdump(stdout, "Cipher IV(crypto op):",
             crypto_iv,
-            sa->config.iv_length);
+            sa->iv_length);
 
     rte_hexdump(stdout, "Auth data:",
             rte_pktmbuf_mtod_offset(
@@ -136,7 +134,7 @@ static void esp_downlink_process(
 
     rte_hexdump(stdout, "Auth digest:",
             crypto_op->sym->auth.digest.data,
-            sa->config.digest_length);
+            sa->digest_length);
 #endif
 
     crypto_op->sym->m_src = packet;
@@ -178,7 +176,7 @@ static void esp_downlink_process(
 
     // Remove all padding bytes if necessary
     uint8_t *next_hdr = rte_pktmbuf_mtod_offset(packet, uint8_t*,
-            rte_pktmbuf_pkt_len(packet) - sa->config.digest_length - 1);
+            rte_pktmbuf_pkt_len(packet) - sa->digest_length - 1);
     uint8_t *pad_length_ptr = next_hdr - 1;
     uint8_t *padding_ptr = pad_length_ptr - (*pad_length_ptr);
     for (uint8_t i = 0; i < *pad_length_ptr; i++) {
@@ -194,12 +192,14 @@ static void esp_downlink_process(
     }
 
     if (rte_pktmbuf_trim(packet, *pad_length_ptr + 2) ||
-            rte_pktmbuf_trim(packet, sa->config.digest_length)) {
+            rte_pktmbuf_trim(packet, sa->digest_length)) {
         RTE_LOG(ERR, USER1, "ESP: Failed to remove digest and padding, dropping packet!!!\n");
         goto clean_up;
     }
 
-    packdev_ipv4_process(packet, port_id, true /* inner packet */);
+    packdev_metadata_t *metadata = PACKDEV_METADATA_PTR(packet);
+    metadata->inner_packet = true;
+    packdev_ipv4_process(packet);
     return;
 
 clean_up:
@@ -212,11 +212,9 @@ clean_up:
     }
 }
 
-void packdev_esp_process(
-        struct rte_mbuf *packet,
-        uint16_t port_id) {
-    struct ipv4_hdr *ipv4_hdr = (struct ipv4_hdr*)MBUF_IP_HDR_OFFSET(packet);
-    struct esp_hdr *esp_hdr = (struct esp_hdr*)MBUF_IPV4_ESP_HDR_OFFSET(packet);
+void packdev_esp_process(struct rte_mbuf *packet) {
+    struct ipv4_hdr *ipv4_hdr = MBUF_IPV4_HDR_PTR(packet);
+    struct esp_hdr *esp_hdr = MBUF_IPV4_ESP_HDR_PTR(packet);
     uint32_t spi = rte_bswap32(esp_hdr->spi);
     RTE_LOG(DEBUG, USER1, "ESP: Received SPI: (%u)\n", rte_bswap32(esp_hdr->spi));
     RTE_LOG(DEBUG, USER1, "ESP: Received SEQ no: (%u)\n", rte_bswap32(esp_hdr->seq));
@@ -227,7 +225,7 @@ void packdev_esp_process(
             rte_bswap32(ipv4_hdr->src_addr));
     if (sa != NULL) {
         RTE_LOG(DEBUG, USER1, "ESP: Found SA (index:%u) for SPI: (%u)\n",
-                sa->config.sa_id, spi);
-        esp_downlink_process(packet, sa, port_id);
+                sa->sa_id, spi);
+        esp_downlink_process(packet, sa);
     }
 }

@@ -13,13 +13,51 @@
 #include <rte_mbuf.h>
 #include <rte_ether.h>
 
-struct ether_hdr* packdev_eth_get_hdr(struct rte_mbuf *mbuf) {
-    return rte_pktmbuf_mtod(mbuf, struct ether_hdr *);
+#include "packdev_common.h"
+#include "packdev_packet.h"
+#include "packdev_eth.h"
+#include "packdev_vlan.h"
+#include "packdev_ipv4.h"
+
+void packdev_eth_build(struct rte_mbuf *packet) {
+    struct ether_hdr *eth_hdr =
+        (struct ether_hdr*)rte_pktmbuf_prepend(packet, sizeof(struct ether_hdr));
+    eth_random_addr(eth_hdr->s_addr.addr_bytes);
+    eth_random_addr(eth_hdr->d_addr.addr_bytes);
+    eth_hdr->ether_type = rte_bswap16(ETHER_TYPE_IPv4);
+
+    // TODO: QUEUEID: fix lcore id to rx/tx queue id
+    packdev_packet_send(packet, packet->port, 0);
 }
 
-uint16_t packdev_eth_get_type(struct rte_mbuf *mbuf) {
-    struct ether_hdr *eth_hdr = packdev_eth_get_hdr(mbuf);
-    return (uint16_t)rte_bswap16(eth_hdr->ether_type);
+void packdev_eth_process(struct rte_mbuf *packet) {
+    struct ether_hdr *eth_hdr = MBUF_ETH_HDR_PTR(packet);
+    uint16_t ether_type = rte_bswap16(eth_hdr->ether_type);
+    packdev_eth_print_addr(eth_hdr->s_addr);
+    packdev_eth_print_addr(eth_hdr->d_addr);
+
+    if (rte_pktmbuf_adj(packet, OFF_ETH_HDR) == NULL) {
+        RTE_LOG(ERR, USER1,
+                "PACKET: Failed to remove ethernet header, dropping packet!!!\n");
+        rte_pktmbuf_free(packet);
+        return;
+    }
+
+    switch (ether_type) {
+    case ETHER_TYPE_VLAN:
+        /* Frees the mbuf */
+        packdev_vlan_process(packet);
+        break;
+    case ETHER_TYPE_IPv4:
+        /* Frees the mbuf */
+        packdev_ipv4_process(packet);
+        break;
+    default:
+        RTE_LOG(INFO, USER1, "Unknown ether type: %u\n", ether_type);
+        RTE_LOG(INFO, USER1, "Do not know how to handle ether type: %u\n", ether_type);
+        rte_pktmbuf_free(packet);
+        break;
+    }
 }
 
 void packdev_eth_print_addr(struct ether_addr addr) {

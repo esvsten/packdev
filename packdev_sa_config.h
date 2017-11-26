@@ -29,21 +29,19 @@ struct sa_attr_t {
 };
 
 struct sa_config_t {
-    uint32_t sa_id;
-
     packdev_encr_t encr_algorithm;
     uint8_t encr_key[MAX_ENCR_KEY_LENGTH];
-    uint32_t iv_length;
 
     packdev_auth_t auth_algorithm;
     uint8_t auth_key[MAX_AUTH_KEY_LENGTH];
-    uint32_t digest_length;
 };
 
 typedef struct {
-    struct sa_attr_t attr;
-    struct sa_config_t config;
+    uint32_t sa_id;
+    uint32_t iv_length;
+    uint32_t digest_length;
 
+    struct sa_attr_t attr;
     struct rte_cryptodev_sym_session *session;
 } packdev_sa_t;
 
