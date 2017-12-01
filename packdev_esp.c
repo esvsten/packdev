@@ -216,8 +216,12 @@ void packdev_esp_process(struct rte_mbuf *packet) {
     struct ipv4_hdr *ipv4_hdr = MBUF_IPV4_HDR_PTR(packet);
     struct esp_hdr *esp_hdr = MBUF_IPV4_ESP_HDR_PTR(packet);
     uint32_t spi = rte_bswap32(esp_hdr->spi);
-    RTE_LOG(DEBUG, USER1, "ESP: Received SPI: (%u)\n", rte_bswap32(esp_hdr->spi));
+    RTE_LOG(DEBUG, USER1, "ESP: Received SPI: (0x%08x)\n", rte_bswap32(esp_hdr->spi));
     RTE_LOG(DEBUG, USER1, "ESP: Received SEQ no: (%u)\n", rte_bswap32(esp_hdr->seq));
+#if 0
+    RTE_LOG(DEBUG, USER1, "ESP: Received local_addr: (0x%08x)\n", rte_bswap32(ipv4_hdr->dst_addr));
+    RTE_LOG(DEBUG, USER1, "ESP: Received remote_addr: (0x%08x)\n", rte_bswap32(ipv4_hdr->src_addr));
+#endif
 
     packdev_sa_t *sa = spi_lookup(
             spi,

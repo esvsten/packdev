@@ -7,6 +7,8 @@
 
  */
 
+#include <glib.h>
+#include <arpa/inet.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdbool.h>
@@ -20,12 +22,14 @@
 #include "packdev_common.h"
 #include "packdev_session.h"
 
+#define SESSION_CONFIG_FILE "packdev_session.conf"
+
 // TODO: Replace with rte_flow instead of rte_hash table
 struct rte_hash *global_session_table;
 struct rte_hash_parameters session_table_params;
 
 static void add_session(
-        uint32_t session_id,
+       uint32_t session_id,
         uint32_t src_addr,
         uint32_t dst_addr,
         uint32_t src_port,
@@ -47,25 +51,26 @@ static void add_session(
 }
 
 static void setup_session_config() {
-    uint32_t session_id = 1;
-    add_session(
-            session_id++,
-            IPv4(192,168,17,114),
-            IPv4(192,168,0,2),
-            10,
-            11);
-    add_session(
-            session_id++,
-            IPv4(192,168,0,1),
-            IPv4(192,168,16,36),
-            20,
-            21);
-    add_session(
-            session_id++,
-            IPv4(192,168,17,114),
-            IPv4(192,168,16,36),
-            47043,
-            9995);
+    GError *error = NULL;
+    GKeyFile *gkf = g_key_file_new();
+    if (!g_key_file_load_from_file(gkf, SESSION_CONFIG_FILE, G_KEY_FILE_NONE, NULL)) {
+        rte_panic("Could not read config file %s\n", SESSION_CONFIG_FILE);
+    }
+
+    gsize num_sessions = 0;
+    gchar **sessions = g_key_file_get_groups(gkf, &num_sessions);
+    for (guint index = 0; index < num_sessions; index++) {
+         gint session_id = g_key_file_get_integer(gkf, sessions[index], "session_id", &error);
+         gint src_addr;
+         inet_pton(AF_INET, g_key_file_get_string(gkf, sessions[index], "src_addr", &error),
+                     &src_addr);
+         gint dst_addr;
+         inet_pton(AF_INET, g_key_file_get_string(gkf, sessions[index], "dst_addr", &error),
+                     &dst_addr);
+         gint src_port = g_key_file_get_integer(gkf, sessions[index], "src_port", &error);
+         gint dst_port = g_key_file_get_integer(gkf, sessions[index], "dst_port", &error);
+         add_session(session_id, rte_bswap32(src_addr), rte_bswap32(dst_addr), src_port, dst_port);
+    }
 }
 
 void packdev_session_init() {

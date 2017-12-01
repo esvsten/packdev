@@ -2,6 +2,8 @@
  * ACL configuration file *
  *                        */
 
+#include <glib.h>
+#include <arpa/inet.h>
 #include <sys/types.h>
 
 #include <rte_ether.h>
@@ -9,6 +11,8 @@
 
 #include "packdev_common.h"
 #include "packdev_acl_config.h"
+
+#define ACL_CONFIG_FILE "packdev_acl.conf"
 
 static struct rte_acl_ctx *global_context;
 
@@ -99,6 +103,21 @@ struct acl_ipv4_rule packdev_acl_add_ipv4_rule(
         uint16_t src_port_end,
         uint16_t dst_port_begin,
         uint16_t dst_port_end) {
+#if 0
+    RTE_LOG(DEBUG, USER1, "ACL-CONFIG: add ipv4 rule:\n");
+    RTE_LOG(DEBUG, USER1, " action:%u\n", result);
+    RTE_LOG(DEBUG, USER1, " priority:%u\n", priority);
+    RTE_LOG(DEBUG, USER1, " protocol:%u\n", protocol);
+    RTE_LOG(DEBUG, USER1, " protocol_mask:%u\n", protocol_mask);
+    RTE_LOG(DEBUG, USER1, " src_addr_begin:%u\n", src_addr_begin);
+    RTE_LOG(DEBUG, USER1, " src_addr_end:%u\n", src_addr_end);
+    RTE_LOG(DEBUG, USER1, " dst_addr_begin:%u\n", dst_addr_begin);
+    RTE_LOG(DEBUG, USER1, " dst_addr_end:%u\n", dst_addr_end);
+    RTE_LOG(DEBUG, USER1, " src_port_begin:%u\n", src_port_begin);
+    RTE_LOG(DEBUG, USER1, " src_port_end:%u\n", src_port_end);
+    RTE_LOG(DEBUG, USER1, " dst_port_begin:%u\n", dst_port_begin);
+    RTE_LOG(DEBUG, USER1, " dst_port_end:%u\n", dst_port_end);
+#endif
     struct acl_ipv4_rule acl_rule = {
         .data = {
             .userdata = result,
@@ -139,44 +158,60 @@ void packdev_acl_config_init() {
     /* Setup ACL fields */
     setup_acl_field_definitions();
 
-    /* Add static ACL rules here */
-    struct acl_ipv4_rule acl_rules[4];
-    acl_rules[0] = packdev_acl_add_ipv4_rule(
-            PACKDEV_ACL_ACCEPT, 1 /* priority */,
-            0, 0, // protocol
-            0, 0, // source address
-            IPv4(192,168,0,0), IPv4(192,168,0,255), // destination address
-            0, 0xffff, // source port
-            0, 0xffff); // destination port
+    GError *error = NULL;
+    GKeyFile *gkf = g_key_file_new();
+    if (!g_key_file_load_from_file(gkf, ACL_CONFIG_FILE, G_KEY_FILE_NONE, NULL)) {
+        rte_panic("Could not read config file %s\n", ACL_CONFIG_FILE);
+    }
 
-    acl_rules[1] = packdev_acl_add_ipv4_rule(
-            PACKDEV_ACL_ACCEPT, 2 /* priority */,
-            0, 0, // protocol
-            0, 0, // source address
-            IPv4(192,168,1,0), IPv4(192,168,1,255), // destination address
-            0, 0xffff, // source port
-            0, 0xffff); // destination port
+    gsize num_acls = 0;
+    gchar **acls = g_key_file_get_groups(gkf, &num_acls);
+    struct acl_ipv4_rule *acl_rules = malloc(num_acls * sizeof(struct acl_ipv4_rule));
+    for (guint index = 0; index < num_acls; index++) {
+         gchar *action = g_key_file_get_string(gkf, acls[index], "action", &error);
+         packdev_acl_result_t acl_action = PACKDEV_ACL_NO_MATCH;
+         if (strcmp(action, "ACCEPT") == 0) {
+             acl_action = PACKDEV_ACL_ACCEPT;
+         } else if (strcmp(action, "DENY") == 0) {
+             acl_action = PACKDEV_ACL_DENY;
+         }
+         gint priority = g_key_file_get_integer(gkf, acls[index], "priority", &error);
+         gint protocol = g_key_file_get_integer(gkf, acls[index], "protocol", &error);
+         gint protocol_mask = g_key_file_get_integer(gkf, acls[index], "protocol_mask", &error);
+         gint src_ip_addr_begin;
+         inet_pton(AF_INET, g_key_file_get_string(gkf, acls[index], "src_ip_addr_begin", &error),
+                     &src_ip_addr_begin);
+         gint src_ip_addr_end;
+         inet_pton(AF_INET, g_key_file_get_string(gkf, acls[index], "src_ip_addr_end", &error),
+                     &src_ip_addr_end);
+         gint dst_ip_addr_begin;
+         inet_pton(AF_INET, g_key_file_get_string(gkf, acls[index], "dst_ip_addr_begin", &error),
+                     &dst_ip_addr_begin);
+         gint dst_ip_addr_end;
+         inet_pton(AF_INET, g_key_file_get_string(gkf, acls[index], "dst_ip_addr_end", &error),
+                     &dst_ip_addr_end);
+         gint src_port_begin = g_key_file_get_integer(gkf, acls[index], "src_port_begin", &error);
+         gint src_port_end = g_key_file_get_integer(gkf, acls[index], "src_port_end", &error);
+         gint dst_port_begin = g_key_file_get_integer(gkf, acls[index], "dst_port_begin", &error);
+         gint dst_port_end = g_key_file_get_integer(gkf, acls[index], "dst_port_end", &error);
+         acl_rules[index] = packdev_acl_add_ipv4_rule(
+                 acl_action, priority,
+                 protocol, protocol_mask,
+                 rte_bswap32(src_ip_addr_begin),
+                 rte_bswap32(src_ip_addr_end),
+                 rte_bswap32(dst_ip_addr_begin),
+                 rte_bswap32(dst_ip_addr_end),
+                 src_port_begin, src_port_end,
+                 dst_port_begin, dst_port_end);
+    }
 
-    acl_rules[2] = packdev_acl_add_ipv4_rule(
-            PACKDEV_ACL_ACCEPT, 3 /* priority */,
-            17, 0xff, // protocol
-            IPv4(192,168,17,114), IPv4(192,168,17,114), // source address
-            IPv4(192,168,16,36), IPv4(192,168,16,36), // source address
-            0, 0xffff, // source port
-            0, 0xffff); // destination port
-
-    acl_rules[3] = packdev_acl_add_ipv4_rule(
-            PACKDEV_ACL_DENY, 4 /* priority */,
-            17, 0xff, // protocol
-            IPv4(192,168,17,114), IPv4(192,168,17,114), // source address
-            IPv4(192,168,16,36), IPv4(192,168,16,36), // source address
-            46531, 46531, // source port
-            0, 0xffff); // destination port
+    g_key_file_free (gkf);
 
     global_context = packdev_acl_setup_context(
             "packdev-acl-ipv4",
-            RTE_DIM(acl_rules),
+            num_acls,
             (const struct rte_acl_rule*)acl_rules);
+    free(acl_rules);
 }
 
 struct rte_acl_ctx* packdev_acl_config_get_context() {

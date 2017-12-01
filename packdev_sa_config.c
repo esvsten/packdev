@@ -7,6 +7,8 @@
 
  */
 
+#include <glib.h>
+#include <arpa/inet.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdbool.h>
@@ -24,6 +26,8 @@
 #include "packdev_common.h"
 #include "packdev_crypto.h"
 #include "packdev_sa_config.h"
+
+#define SA_CONFIG_FILE "packdev_sa.conf"
 
 struct rte_hash *global_sa_table;
 struct rte_hash_parameters sa_table_params;
@@ -90,16 +94,23 @@ static void add_sa_session(
             global_sa_table,
             &key,
             (void*)((uintptr_t)sa_id));
+#if 0
+    RTE_LOG(DEBUG, USER1, "SA: SPI=0x%08x\n", sas[sa_id].attr.spi);
+    RTE_LOG(DEBUG, USER1, "SA: local_addr=0x%08x\n", sas[sa_id].attr.local_addr);
+    RTE_LOG(DEBUG, USER1, "SA: remote_addr=0x%08x\n", sas[sa_id].attr.remote_addr);
+#endif
     RTE_LOG(DEBUG, USER1, "SA: Added hash = 0x%08x\n", key);
 }
 
 static void add_sa(
         uint32_t sa_id,
         uint32_t spi,
+        packdev_encr_t encr_alg,
+        char *encr_key,
+        packdev_auth_t auth_alg,
+        char *auth_key,
         uint32_t local_addr,
         uint32_t remote_addr) {
-    char *encr_key = "aescbcencryption";
-    char *auth_key = "hmacsha1authenticati";
     memset(&sas[sa_id], 0, sizeof(sas[sa_id]));
     sas[sa_id].attr.spi = spi;
     sas[sa_id].attr.local_addr = local_addr;
@@ -109,19 +120,47 @@ static void add_sa(
     sas[sa_id].digest_length = 12;
 
     struct sa_config_t sa_config;
-    sa_config.encr_algorithm = PACKDEV_ENCR_AES_128_CBC;
+    sa_config.encr_algorithm = encr_alg;
     rte_memcpy(sa_config.encr_key, encr_key, strlen(encr_key));
-    sa_config.auth_algorithm = PACKDEV_AUTH_HMAC_SHA1;
+    sa_config.auth_algorithm = auth_alg;
     rte_memcpy(sa_config.auth_key, auth_key, strlen(auth_key));
 
     add_sa_session(sa_id, &sa_config);
 }
 
 static void setup_sa_config() {
-    uint32_t sa_id = 1;
-    add_sa(sa_id++, 0xa, IPv4(10,0,0,2), IPv4(10,0,0,1));
-    add_sa(sa_id++, 0x2, IPv4(192,168,1,1), IPv4(192,168,1,2));
-    add_sa(sa_id++, 0x3, IPv4(192,168,2,1), IPv4(192,168,2,2));
+    GError *error = NULL;
+    GKeyFile *gkf = g_key_file_new();
+    if (!g_key_file_load_from_file(gkf, SA_CONFIG_FILE, G_KEY_FILE_NONE, NULL)) {
+        rte_panic("Could not read config file %s\n", SA_CONFIG_FILE);
+    }
+
+    gsize num_sas = 0;
+    gchar **sas = g_key_file_get_groups(gkf, &num_sas);
+    for (guint index = 0; index < num_sas; index++) {
+         gint sa_id = g_key_file_get_integer(gkf, sas[index], "sa_id", &error);
+         gint spi = g_key_file_get_integer(gkf, sas[index], "spi", &error);
+         packdev_encr_t encr_alg = PACKDEV_ENCR_NULL;
+         gchar* alg = g_key_file_get_string(gkf, sas[index], "encr_alg", &error);
+         if (strcmp(alg, "AES_128_CBC") == 0) {
+             encr_alg = PACKDEV_ENCR_AES_128_CBC;
+         }
+         gchar* encr_key = g_key_file_get_string(gkf, sas[index], "encr_key", &error);
+         packdev_auth_t auth_alg = PACKDEV_ENCR_NULL;
+         alg = g_key_file_get_string(gkf, sas[index], "auth_alg", &error);
+         if (strcmp(alg, "HMAC_SHA1") == 0) {
+             auth_alg = PACKDEV_AUTH_HMAC_SHA1;
+         }
+         gchar* auth_key = g_key_file_get_string(gkf, sas[index], "auth_key", &error);
+         gint local_addr;
+         inet_pton(AF_INET, g_key_file_get_string(gkf, sas[index], "local_addr", &error),
+                     &local_addr);
+         gint remote_addr;
+         inet_pton(AF_INET, g_key_file_get_string(gkf, sas[index], "remote_addr", &error),
+                     &remote_addr);
+         add_sa(sa_id, spi, encr_alg, encr_key, auth_alg, auth_key,
+                 rte_bswap32(local_addr), rte_bswap32(remote_addr));
+    }
 }
 
 void packdev_sa_config_init() {
