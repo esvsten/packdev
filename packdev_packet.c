@@ -20,6 +20,7 @@
 #include <rte_debug.h>
 
 #include "packdev_common.h"
+#include "packdev_config.h"
 #include "packdev_packet.h"
 #include "packdev_port.h"
 #include "packdev_eth.h"
@@ -27,15 +28,27 @@
 static void packdev_packet_classify(
         struct rte_mbuf *packet,
         uint16_t port_id) {
-    //RTE_LOG(DEBUG, USER1, "PACKET: new packet received on port(%u)\n", port_id);
+    RTE_LOG(DEBUG, USER1, "############### STARTED PROCESSING ###############\n");
+    //rte_pktmbuf_dump(stdout, packet, packet->data_len);
+
     packdev_port_t *port_data = packdev_port_get(port_id);
     assert(port_data != NULL);
 
     packdev_metadata_t *metadata = PACKDEV_METADATA_PTR(packet);
-    metadata->origin = PACKDEV_ORIGIN_NIC;
+    if (packdev_config_is_eth_port(port_id)) {
+        RTE_LOG(DEBUG, USER1, "PACKET: received on NIC\n");
+        metadata->origin = PACKDEV_ORIGIN_NIC;
+        metadata->direction = PACKDEV_INGRESS;
+    } else {
+        RTE_LOG(DEBUG, USER1, "PACKET: received on VETH\n");
+        metadata->origin = PACKDEV_ORIGIN_VETH;
+        metadata->direction = PACKDEV_EGRESS;
+    }
     metadata->inner_packet = false;
 
     packdev_eth_process(packet);
+
+    RTE_LOG(DEBUG, USER1, "############### FINISHED PROCESSING ###############\n");
 }
 
 static void packdev_packet_classify_bulk(
@@ -105,6 +118,13 @@ void packdev_packet_send(
         struct rte_mbuf *packet,
         uint8_t port_id,
         uint16_t queue_id) {
+    //rte_pktmbuf_dump(stdout, packet, packet->data_len);
+    if (packdev_config_is_eth_port(port_id)) {
+        RTE_LOG(DEBUG, USER1, "PACKET: sent on NIC\n");
+    } else {
+        RTE_LOG(DEBUG, USER1, "PACKET: sent on VETH\n");
+    }
+
     packdev_port_t *port_data = packdev_port_get(port_id);
     assert(port_data != NULL);
 

@@ -159,7 +159,7 @@ static void setup_sa_config() {
          inet_pton(AF_INET, g_key_file_get_string(gkf, sas[index], "remote_addr", &error),
                      &remote_addr);
          add_sa(sa_id, spi, encr_alg, encr_key, auth_alg, auth_key,
-                 rte_bswap32(local_addr), rte_bswap32(remote_addr));
+                 rte_cpu_to_be_32(local_addr), rte_cpu_to_be_32(remote_addr));
     }
 }
 

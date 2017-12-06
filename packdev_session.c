@@ -69,7 +69,7 @@ static void setup_session_config() {
                      &dst_addr);
          gint src_port = g_key_file_get_integer(gkf, sessions[index], "src_port", &error);
          gint dst_port = g_key_file_get_integer(gkf, sessions[index], "dst_port", &error);
-         add_session(session_id, rte_bswap32(src_addr), rte_bswap32(dst_addr), src_port, dst_port);
+         add_session(session_id, rte_cpu_to_be_32(src_addr), rte_cpu_to_be_32(dst_addr), src_port, dst_port);
     }
 }
 

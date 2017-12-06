@@ -67,10 +67,10 @@ void packdev_udp_process(struct rte_mbuf *packet) {
     struct ipv4_hdr *ipv4_hdr = MBUF_IPV4_HDR_PTR(packet);
     struct udp_hdr *udp_hdr = MBUF_IPV4_UDP_HDR_PTR(packet);
     uint32_t session_id = udp_session_lookup(
-            rte_bswap32(ipv4_hdr->src_addr),
-            rte_bswap32(ipv4_hdr->dst_addr),
-            rte_bswap16(udp_hdr->src_port),
-            rte_bswap16(udp_hdr->dst_port));
+            rte_be_to_cpu_32(ipv4_hdr->src_addr),
+            rte_be_to_cpu_32(ipv4_hdr->dst_addr),
+            rte_be_to_cpu_16(udp_hdr->src_port),
+            rte_be_to_cpu_16(udp_hdr->dst_port));
 
     if (session_id == 0) {
         RTE_LOG(NOTICE, USER1, "UDP session not found, dropping packet!!!\n");

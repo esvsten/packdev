@@ -32,12 +32,15 @@
 #include <rte_debug.h>
 
 #include <packdev_common.h>
+#include "packdev_config.h"
 #include <packdev_packet.h>
 #include <packdev_crypto.h>
 #include <packdev_port.h>
 #include <packdev_eth.h>
+#include <packdev_nbr.h>
 #include <packdev_acl.h>
 #include <packdev_acl_config.h>
+#include <packdev_l2_config.h>
 #include <packdev_spd_config.h>
 #include <packdev_sa_config.h>
 #include <packdev_ipv4.h>
@@ -49,15 +52,21 @@ static __attribute__((noreturn)) void packdev_lcore_main_loop(uint8_t lcore_id) 
     const uint16_t num_pkts = DEFAULT_PKT_BURST;
     struct rte_mbuf *pkt_mbufs[DEFAULT_PKT_BURST];
 
+    // ensure there are even number of ports
+    assert(num_ports%2 == 0);
+
     rte_log_set_global_level(RTE_LOG_DEBUG);
     // init devices
     packdev_port_init();
     packdev_crypto_init();
 
     // init data plane modules
+    packdev_nbr_init();
     packdev_ipv4_init();
 
     // init control plane modules
+    packdev_config_init();
+    packdev_l2_config_init();
     packdev_acl_config_init();
     packdev_spd_config_init(); /* only initialize after ACL */
     packdev_sa_config_init();
@@ -70,6 +79,12 @@ static __attribute__((noreturn)) void packdev_lcore_main_loop(uint8_t lcore_id) 
                     "NUMA node(%u) is remote relative to polling thread\n",
                     port_id);
         }
+    }
+
+    // associate veth ports with eth ports
+    uint8_t num_of_eth_ports = num_ports/2;
+    for (uint8_t port_id = 0; port_id < num_of_eth_ports; port_id++) {
+        packdev_config_port_map(port_id, port_id + num_of_eth_ports);
     }
 
     while(1) {

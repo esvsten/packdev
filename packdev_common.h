@@ -3,6 +3,7 @@
 
 #include <rte_eal.h>
 #include <rte_mbuf.h>
+#include <rte_arp.h>
 #include <rte_ether.h>
 #include <rte_ip.h>
 
@@ -36,6 +37,11 @@ enum {
     MAX_NUM_OF_PORTS         = 4,
     MAX_NUM_QUEUES_PER_PORT  = 4,
 
+    MAX_NUM_L2_IFS           = MAX_NUM_OF_PORTS,
+    MAX_NUM_NBRS             = 256,
+    MAX_NUM_VLAN_PER_PORT    = 4,
+    MAX_NUM_L3_IFS           = MAX_NUM_OF_PORTS * MAX_NUM_VLAN_PER_PORT,
+
     MAX_ACL_CATEGORIES       = 1,
     MAX_ACL_RULES            = 128,
 
@@ -53,6 +59,7 @@ enum {
     MAX_NUM_CRYPTO_SESSIONS  = 1024,
     CRYPTO_MESSAGE_LENGTH    = 1024,
     MAX_IV_LENGTH            = 16,
+
 };
 
 /* RFC4303 */
@@ -73,9 +80,22 @@ typedef enum {
     PACKDEV_ORIGIN_MAX
 } packdev_packet_origin_t;
 
+typedef enum {
+    PACKDEV_INGRESS,
+    PACKDEV_EGRESS,
+    PACKDEV_DIR_MAX
+} packdev_packet_direction_t;
+
 typedef struct {
     uint16_t origin;
     uint16_t inner_packet;
+    uint16_t direction;
+    uint8_t src_mac_addr[8];
+    uint8_t input_l2_if_id;
+    uint8_t input_l3_if_id;
+    uint8_t output_l2_if_id;
+    uint8_t output_l3_if_id;
+    uint32_t next_hop_ipv4_addr;
 } packdev_metadata_t;
 
 #define PACKDEV_METADATA_PTR(packet) \
@@ -83,12 +103,17 @@ typedef struct {
 
 #define OFF_ETH_HDR    (sizeof(struct ether_hdr))
 #define OFF_VLAN_HDR   (sizeof(struct vlan_hdr))
+#define OFF_ARP_HDR    (sizeof(struct arp_hdr))
 #define OFF_IPV4_HDR   (sizeof(struct ipv4_hdr))
 #define OFF_ESP_HDR   (sizeof(struct esp_hdr))
 #define MBUF_ETH_HDR_PTR(m) \
     rte_pktmbuf_mtod((m), struct ether_hdr*)
+#define MBUF_ARP_HDR_PTR(m) \
+    rte_pktmbuf_mtod_offset((m), struct arp_hdr*, OFF_ETH_HDR)
+#define MBUF_ARP_VLAN_HDR_PTR(m) \
+    rte_pktmbuf_mtod_offset((m), struct arp_hdr*, OFF_ETH_HDR + OFF_VLAN_HDR)
 #define MBUF_VLAN_HDR_PTR(m) \
-    rte_pktmbuf_mtod((m), struct vlan_hdr*)
+    rte_pktmbuf_mtod_offset((m), struct vlan_hdr*, OFF_ETH_HDR)
 #define MBUF_IPV4_HDR_PTR(m) \
     rte_pktmbuf_mtod((m), struct ipv4_hdr*)
 #define MBUF_IPV4_UDP_HDR_PTR(m) \

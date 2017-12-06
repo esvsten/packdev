@@ -197,10 +197,10 @@ void packdev_acl_config_init() {
          acl_rules[index] = packdev_acl_add_ipv4_rule(
                  acl_action, priority,
                  protocol, protocol_mask,
-                 rte_bswap32(src_ip_addr_begin),
-                 rte_bswap32(src_ip_addr_end),
-                 rte_bswap32(dst_ip_addr_begin),
-                 rte_bswap32(dst_ip_addr_end),
+                 rte_cpu_to_be_32(src_ip_addr_begin),
+                 rte_cpu_to_be_32(src_ip_addr_end),
+                 rte_cpu_to_be_32(dst_ip_addr_begin),
+                 rte_cpu_to_be_32(dst_ip_addr_end),
                  src_port_begin, src_port_end,
                  dst_port_begin, dst_port_end);
     }

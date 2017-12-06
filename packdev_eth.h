@@ -10,5 +10,7 @@ void packdev_eth_process(struct rte_mbuf *packet);
 
 void packdev_eth_print_addr(struct ether_addr addr);
 
+void packdev_eth_vlan_process(struct rte_mbuf *packet);
+
 #endif /* PACKDEV_ETH_H_ */
 
