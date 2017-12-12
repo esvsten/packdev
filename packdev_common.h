@@ -41,13 +41,16 @@ enum {
     MAX_NUM_NBRS             = 256,
     MAX_NUM_VLAN_PER_PORT    = 4,
     MAX_NUM_L3_IFS           = MAX_NUM_OF_PORTS * MAX_NUM_VLAN_PER_PORT,
+    MAX_NUM_ROUTES           = 256,
+    MAX_NUM_NEXT_HOPS        = 256,
 
     MAX_ACL_CATEGORIES       = 1,
     MAX_ACL_RULES            = 128,
 
-    MAX_REASSEMBLY_FLOWS     = 1024,
+    MAX_NUM_FRAGMENTS        = 4,
+    MAX_REASSEMBLY_FLOWS     = 8192,
     MAX_REASSEMBLY_FRAGMENTS = 4,
-    REASSEMBLY_TIMER_MS      = 100,
+    REASSEMBLY_TIMER_MS      = 2000,
 
     MAX_NUM_OF_SAS           = 128,
 
@@ -101,6 +104,12 @@ typedef struct {
 #define PACKDEV_METADATA_PTR(packet) \
     ((packdev_metadata_t*) ((uintptr_t) packet + sizeof(struct rte_mbuf)))
 
+#define PACKDEV_METADATA_COPY(dst_packet, src_packet) \
+    memcpy( \
+            PACKDEV_METADATA_PTR(dst_packet), \
+            PACKDEV_METADATA_PTR(src_packet), \
+            sizeof(packdev_metadata_t));
+
 #define OFF_ETH_HDR    (sizeof(struct ether_hdr))
 #define OFF_VLAN_HDR   (sizeof(struct vlan_hdr))
 #define OFF_ARP_HDR    (sizeof(struct arp_hdr))
@@ -116,7 +125,11 @@ typedef struct {
     rte_pktmbuf_mtod_offset((m), struct vlan_hdr*, OFF_ETH_HDR)
 #define MBUF_IPV4_HDR_PTR(m) \
     rte_pktmbuf_mtod((m), struct ipv4_hdr*)
+#define MBUF_IPV4_ICMP_HDR_PTR(m) \
+    rte_pktmbuf_mtod_offset((m), struct udp_hdr*, OFF_IPV4_HDR)
 #define MBUF_IPV4_UDP_HDR_PTR(m) \
+    rte_pktmbuf_mtod_offset((m), struct udp_hdr*, OFF_IPV4_HDR)
+#define MBUF_IPV4_TCP_HDR_PTR(m) \
     rte_pktmbuf_mtod_offset((m), struct udp_hdr*, OFF_IPV4_HDR)
 #define MBUF_IPV4_ESP_HDR_PTR(m) \
     rte_pktmbuf_mtod_offset((m), struct esp_hdr*, OFF_IPV4_HDR)

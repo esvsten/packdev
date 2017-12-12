@@ -21,7 +21,8 @@
 #include "packdev_port.h"
 
 static packdev_port_t port_data[MAX_NUM_OF_PORTS];
-static struct rte_mempool* tx_mp = NULL;
+static struct rte_mempool* tx_direct_mp = NULL;
+static struct rte_mempool* tx_indirect_mp = NULL;
 
 static inline int port_init(uint8_t port_id)
 {
@@ -134,15 +135,26 @@ void packdev_port_init()
     }
 
     /* initalize memory packet buffers */
-    tx_mp = rte_pktmbuf_pool_create(
-            "tx_mp",
+    tx_direct_mp = rte_pktmbuf_pool_create(
+            "tx_direct_mp",
             MAX_TX_MBUFS,
             MBUF_TX_CACHE_SIZE,
             DEFAULT_MBUF_PRIV_SIZE,
             RTE_MBUF_DEFAULT_BUF_SIZE,
             rte_socket_id());
-    if (tx_mp == NULL) {
-        rte_exit(EXIT_FAILURE, "Cannot create tx mbuf pool\n");
+    if (tx_direct_mp == NULL) {
+        rte_exit(EXIT_FAILURE, "Cannot create direct tx mbuf pool\n");
+    }
+
+    tx_indirect_mp = rte_pktmbuf_pool_create(
+            "tx_indirect_mp",
+            MAX_TX_MBUFS,
+            MBUF_TX_CACHE_SIZE,
+            DEFAULT_MBUF_PRIV_SIZE,
+            RTE_MBUF_DEFAULT_BUF_SIZE,
+            rte_socket_id());
+    if (tx_indirect_mp == NULL) {
+        rte_exit(EXIT_FAILURE, "Cannot create indirect tx mbuf pool\n");
     }
 }
 
@@ -159,6 +171,7 @@ void packdev_port_destroy() {
             rte_eth_dev_close(port_id);
         }
     }
+    RTE_LOG(INFO, USER1, "***Destorying all ports completed***\n");
 }
 
 packdev_port_t* packdev_port_get(uint32_t port_id) {
@@ -171,7 +184,11 @@ packdev_port_t* packdev_port_get(uint32_t port_id) {
 }
 
 struct rte_mempool* packdev_port_get_tx_mp() {
-    return tx_mp;
+    return tx_direct_mp;
+}
+
+struct rte_mempool* packdev_port_get_tx_indirect_mp() {
+    return tx_indirect_mp;
 }
 
 void packdev_port_mac_addr_print(uint32_t port_id) {

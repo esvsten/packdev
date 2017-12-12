@@ -46,7 +46,7 @@ static uint32_t get_free_nbr_id() {
 }
 
 static uint32_t get_nbr_id(uint32_t ipv4_addr) {
-    uint32_t nbr_id = 0;
+    uint32_t nbr_id = MAX_NUM_NBRS;
     uint32_t key = rte_jhash(&ipv4_addr, sizeof(ipv4_addr), NBR_TABLE_IV);
     int lookup_result = rte_hash_lookup_data(
             global_nbr_table,

@@ -8,6 +8,8 @@
  */
 
 #include <sys/types.h>
+#include <execinfo.h>
+#include <signal.h>
 #include <unistd.h>
 #include <stdint.h>
 #include <inttypes.h>
@@ -41,6 +43,7 @@
 #include <packdev_acl.h>
 #include <packdev_acl_config.h>
 #include <packdev_l2_config.h>
+#include <packdev_l3_config.h>
 #include <packdev_spd_config.h>
 #include <packdev_sa_config.h>
 #include <packdev_ipv4.h>
@@ -67,6 +70,7 @@ static __attribute__((noreturn)) void packdev_lcore_main_loop(uint8_t lcore_id) 
     // init control plane modules
     packdev_config_init();
     packdev_l2_config_init();
+    packdev_l3_config_init();
     packdev_acl_config_init();
     packdev_spd_config_init(); /* only initialize after ACL */
     packdev_sa_config_init();
@@ -99,10 +103,12 @@ static __attribute__((noreturn)) void packdev_lcore_main_loop(uint8_t lcore_id) 
     }
 }
 
-static int lauch_one_core(__attribute__((unused)) void *arg) {
+static int launch_one_core(__attribute__((unused)) void *arg) {
     uint32_t lcore_id = rte_lcore_id();
     if (lcore_id == rte_get_master_lcore()) {
         RTE_LOG(INFO, USER1, "master core %u ready\n", lcore_id);
+        RTE_LOG(INFO, USER1, "Starting main loop on lcore(%u)\n", lcore_id);
+        packdev_lcore_main_loop(lcore_id);
     } else {
         RTE_LOG(INFO, USER1, "slave core %u ready\n", lcore_id);
     }
@@ -110,9 +116,53 @@ static int lauch_one_core(__attribute__((unused)) void *arg) {
     return 0;
 }
 
+#define MAX_BACKTRACE   32
+static void signal_handler(int sig __rte_unused)
+{
+    if (sig == SIGINT) {
+        signal(sig, SIG_IGN);
+        printf("Ojj, did you hit Ctrl-C?\n");
+        printf("Do you really want to quit PACKDEV? [y/n] ");
+        fflush(stdout);
+        char c = getchar();
+        if (c == 'y' || c == 'Y') {
+            packdev_port_destroy();
+            exit(0);
+        }
+
+        signal(sig, signal_handler);
+        return;
+    }
+
+    RTE_LOG(CRIT, USER1, "\n======");
+    if (sig == SIGSEGV) {
+        RTE_LOG(CRIT, USER1, "PACKDEV: Got a Segment Fault\n");
+    } else if (sig == SIGHUP) {
+        RTE_LOG(CRIT, USER1, "PACKDEV: Got a SIGHUP\n");
+    } else {
+        RTE_LOG(CRIT, USER1, "PACKDEV: Got a signal %d\n", sig);
+    }
+    RTE_LOG(CRIT, USER1, "\n");
+
+    void *array[MAX_BACKTRACE];
+    size_t size = backtrace(array, MAX_BACKTRACE);
+    char **strings = backtrace_symbols (array, size);
+    RTE_LOG(CRIT, USER1, "Obtained %zd stack frames.\n", size);
+    for (size_t i = 0; i < size; i++) {
+        RTE_LOG(CRIT, USER1, "%s\n", strings[i]);
+    }
+
+    free (strings);
+    abort();
+}
+
 int main(int argc, char **argv) {
     unsigned lcore_id;
     unsigned master_core_id;
+
+    signal(SIGSEGV, signal_handler);
+    signal(SIGHUP, signal_handler);
+    signal(SIGINT, signal_handler);
 
     RTE_LOG(INFO, EAL, "** Initalizing EAL.\n");
     if (rte_eal_init(argc, argv) < 0) {
@@ -127,14 +177,11 @@ int main(int argc, char **argv) {
     }
 
     RTE_LCORE_FOREACH_SLAVE(lcore_id) {
-        rte_eal_remote_launch(lauch_one_core, NULL, lcore_id);
+        rte_eal_remote_launch(launch_one_core, NULL, lcore_id);
     }
 
-    lauch_one_core(NULL); //call on master core
+    launch_one_core(NULL); //call on master core
     rte_eal_mp_wait_lcore();
-
-    RTE_LOG(INFO, USER1, "Starting main loop on lcore(%u)\n", lcore_id);
-    packdev_lcore_main_loop(lcore_id);
 
     packdev_port_destroy();
 

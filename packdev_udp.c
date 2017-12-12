@@ -66,6 +66,8 @@ static uint32_t udp_session_lookup(
 void packdev_udp_process(struct rte_mbuf *packet) {
     struct ipv4_hdr *ipv4_hdr = MBUF_IPV4_HDR_PTR(packet);
     struct udp_hdr *udp_hdr = MBUF_IPV4_UDP_HDR_PTR(packet);
+    RTE_LOG(DEBUG, USER1, "UDP: src_port=%u\n", rte_be_to_cpu_16(udp_hdr->src_port));
+    RTE_LOG(DEBUG, USER1, "UDP: dst_port=%u\n", rte_be_to_cpu_16(udp_hdr->dst_port));
     uint32_t session_id = udp_session_lookup(
             rte_be_to_cpu_32(ipv4_hdr->src_addr),
             rte_be_to_cpu_32(ipv4_hdr->dst_addr),

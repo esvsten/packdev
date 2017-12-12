@@ -17,6 +17,8 @@
 #include <rte_mbuf.h>
 #include <rte_ip.h>
 #include <rte_icmp.h>
+#include <rte_tcp.h>
+#include <rte_udp.h>
 #include <rte_acl.h>
 #include <rte_common.h>
 #include <rte_cycles.h>
@@ -27,16 +29,77 @@
 #include "packdev_eth.h"
 #include "packdev_acl.h"
 #include "packdev_acl_config.h"
+#include "packdev_l3_config.h"
 #include "packdev_common.h"
 #include "packdev_config.h"
 #include "packdev_esp.h"
 #include "packdev_udp.h"
 #include "packdev_packet.h"
+#include "packdev_port.h"
 
 #include "packdev_ipv4.h"
 
 struct rte_ip_frag_tbl *global_frag_table;
 struct rte_ip_frag_death_row death_row;
+
+static uint16_t get_udptcp_checksum(
+        struct rte_mbuf *packet) {
+    struct ipv4_hdr *ipv4_hdr = MBUF_IPV4_HDR_PTR(packet);
+
+    void *data_ptr = rte_pktmbuf_mtod_offset((packet), void*, sizeof(struct ipv4_hdr));
+    uint32_t checksum = rte_raw_cksum(data_ptr, packet->data_len - sizeof(struct ipv4_hdr));
+    struct rte_mbuf *segment = packet->next;
+
+    while (segment != NULL) {
+        data_ptr = rte_pktmbuf_mtod(segment, void*);
+        checksum += rte_raw_cksum(data_ptr, segment->data_len);
+        segment = segment->next;
+    }
+
+    checksum += rte_ipv4_phdr_cksum(ipv4_hdr, 0);
+
+    checksum = ((checksum & 0xffff0000) >> 16) + (checksum & 0xffff);
+    checksum = (~checksum) & 0xffff;
+    if (checksum == 0) {
+        checksum = 0xffff;
+    }
+
+    return (uint16_t)checksum;
+}
+
+static void set_l4hdr_checksum(struct rte_mbuf *packet) {
+    struct ipv4_hdr *ipv4_hdr = MBUF_IPV4_HDR_PTR(packet);
+    uint16_t original_checksum = ipv4_hdr->hdr_checksum;
+    ipv4_hdr->hdr_checksum = 0;
+    switch(ipv4_hdr->next_proto_id) {
+    case IPPROTO_UDP:
+        RTE_LOG(DEBUG, USER1, "IPv4: Set UDP checksum\n");
+        struct udp_hdr *udp_hdr = MBUF_IPV4_UDP_HDR_PTR(packet);
+        //RTE_LOG(DEBUG, USER1, "old (0x%x), ", rte_be_to_cpu_16(udp_hdr->dgram_cksum));
+        udp_hdr->dgram_cksum = 0;
+        udp_hdr->dgram_cksum = get_udptcp_checksum(packet);
+        //RTE_LOG(DEBUG, USER1, "new (0x%x)\n", rte_be_to_cpu_16(udp_hdr->dgram_cksum));
+        break;
+    case IPPROTO_TCP:
+        RTE_LOG(DEBUG, USER1, "IPv4: Set TCP checksum\n");
+        struct tcp_hdr *tcp_hdr = MBUF_IPV4_TCP_HDR_PTR(packet);
+        //RTE_LOG(DEBUG, USER1, "old (0x%x), ", rte_be_to_cpu_16(tcp_hdr->cksum));
+        tcp_hdr->cksum = 0;
+        tcp_hdr->cksum = get_udptcp_checksum(packet);
+        //RTE_LOG(DEBUG, USER1, "new (0x%x)\n", rte_be_to_cpu_16(tcp_hdr->cksum));
+        break;
+    default:
+        break;
+    }
+    ipv4_hdr->hdr_checksum = original_checksum;
+}
+
+static void set_ipv4_checksum(struct rte_mbuf *packet) {
+    RTE_LOG(DEBUG, USER1, "IPv4: Set header checksum\n");
+    struct ipv4_hdr *ipv4_hdr = MBUF_IPV4_HDR_PTR(packet);
+    ipv4_hdr->hdr_checksum = 0;
+    ipv4_hdr->hdr_checksum = rte_ipv4_cksum(ipv4_hdr);
+}
 
 static bool is_checksum_correct(struct ipv4_hdr *ipv4_hdr) {
     uint16_t orig_checksum = ipv4_hdr->hdr_checksum;
@@ -52,11 +115,16 @@ static struct rte_mbuf* fragment_process(
         uint64_t current_timestamp) {
     struct ipv4_hdr *ipv4_hdr = MBUF_IPV4_HDR_PTR(packet);
     if (rte_ipv4_frag_pkt_is_fragmented(ipv4_hdr) == 0) {
-        RTE_LOG(DEBUG, USER1, "IPv4 packet is not fragmented\n");
+        RTE_LOG(DEBUG, USER1, "IPv4: packet is not fragmented\n");
         return packet;
     }
 
-    RTE_LOG(DEBUG, USER1, "IPv4 packet is fragmented\n");
+    RTE_LOG(DEBUG, USER1, "IPv4: packet is fragmented\n");
+    if (death_row.cnt >= DEFAULT_PKT_BURST) {
+        RTE_LOG(DEBUG, USER1, "IPv4: death row count: %u\n", death_row.cnt);
+        rte_ip_frag_free_death_row(&death_row, 3);
+    }
+
     struct rte_mbuf *reassembled_packet;
     /* prepare mbuf: setup l2_len/l3_len. */
     packet->l2_len = 0;
@@ -76,10 +144,12 @@ static struct rte_mbuf* fragment_process(
     /* we have our packet reassembled. */
     if (reassembled_packet != packet) {
         packet = reassembled_packet;
+        RTE_LOG(INFO, USER1, "IPv4: reassembly successful!!\n");
+        //rte_pktmbuf_dump(stdout, packet, packet->data_len);
         return packet;
     }
 
-    RTE_LOG(NOTICE, USER1, "IPv4 reassembly failed!!!\n");
+    RTE_LOG(NOTICE, USER1, "IPv4: reassembly failed!!!\n");
     return NULL;
 }
 
@@ -105,13 +175,89 @@ static void ipv4_uplink_process(struct rte_mbuf *packet) {
     packdev_ipv4_print_addr(rte_be_to_cpu_32(ipv4_hdr->src_addr));
     RTE_LOG(DEBUG, USER1, "IPv4 dst address\n");
     packdev_ipv4_print_addr(rte_be_to_cpu_32(ipv4_hdr->dst_addr));
+    RTE_LOG(DEBUG, USER1, "IPv4 total length (%u)\n", rte_be_to_cpu_16(ipv4_hdr->total_length));
     //rte_pktmbuf_dump(stdout, packet, packet->data_len);
 
-    metadata->next_hop_ipv4_addr = rte_be_to_cpu_32(ipv4_hdr->dst_addr);
-    if (metadata->origin == PACKDEV_ORIGIN_VETH) {
-        packdev_eth_build(packet);
-    } else {
+    if (metadata->origin != PACKDEV_ORIGIN_VETH) {
         RTE_LOG(ERR, USER1, "IPv4: FP/NIC originated uplink packets cannot be handled\n");
+        rte_pktmbuf_free(packet);
+        return;
+    }
+
+    packdev_l3_if_t *l3_if =
+        packdev_l3_config_get_using_ipv4_addr(rte_be_to_cpu_32(ipv4_hdr->src_addr));
+    if (l3_if == NULL) {
+        RTE_LOG(NOTICE, USER1, "IPv4: Unable to find L3 interface for the source IPv4 address\n");
+        rte_pktmbuf_free(packet);
+        return;
+    } else {
+        metadata->output_l3_if_id = l3_if->if_id;
+        metadata->output_l2_if_id = l3_if->attr.l2_if_id;
+    }
+
+    // Set checksum
+    set_l4hdr_checksum(packet);
+
+    // Check routing table and fill in next hop address
+    struct next_hop_attr_t *nh =
+        packdev_l3_get_next_hop(rte_be_to_cpu_32(ipv4_hdr->dst_addr));
+    if (nh != NULL) {
+        metadata->output_l3_if_id = nh->l3_if_id;
+        if (nh->gateway) {
+            metadata->next_hop_ipv4_addr = nh->gateway;
+        } else {
+            // connected route
+            metadata->next_hop_ipv4_addr = rte_be_to_cpu_32(ipv4_hdr->dst_addr);
+        }
+    } else {
+        RTE_LOG(ERR, USER1, "IPv4: No route found to destination\n");
+        rte_pktmbuf_free(packet);
+        return;
+    }
+
+    // TODO: Handle fragmentation
+    struct rte_mbuf *fragments[MAX_NUM_FRAGMENTS];
+    int32_t num_fragments = 0;
+    if (packet->pkt_len > l3_if->attr.mtu) {
+        RTE_LOG(DEBUG, USER1,
+                "IPv4: Fragmenting packet greater than MTU (%u)\n", l3_if->attr.mtu);
+        num_fragments = rte_ipv4_fragment_packet(
+                packet,
+                fragments,
+                MAX_NUM_FRAGMENTS,
+                l3_if->attr.mtu,
+                packdev_port_get_tx_mp(),
+                packdev_port_get_tx_indirect_mp());
+
+        switch(num_fragments) {
+            case -ENOMEM:
+                RTE_LOG(ERR, USER1, "IPv4: Fragmentation failed, dropping packet!!!\n");
+                rte_pktmbuf_free(packet);
+                return;
+            case -ENOTSUP:
+                RTE_LOG(ERR, USER1, "IPv4: DF bit set, cannot fragment, dropping packet!!!\n");
+                rte_pktmbuf_free(packet);
+                return;
+            case -EINVAL:
+                RTE_LOG(ERR, USER1, "IPv4: Number of fragments needed greater than max allowed: %u\n",
+                        MAX_NUM_FRAGMENTS);
+                rte_pktmbuf_free(packet);
+                return;
+            default:
+                RTE_LOG(DEBUG, USER1, "IPv4: Fragmentation successful, number of fragments: %u\n",
+                        num_fragments);
+                break;
+        }
+
+        for (uint8_t frag_index = 0; frag_index < num_fragments; ++frag_index) {
+            PACKDEV_METADATA_COPY(fragments[frag_index], packet);
+            set_ipv4_checksum(fragments[frag_index]);
+            packdev_eth_build(fragments[frag_index]);
+        }
+        rte_pktmbuf_free(packet);
+    } else {
+        set_ipv4_checksum(packet);
+        packdev_eth_build(packet);
     }
 }
 
@@ -123,31 +269,63 @@ static void ipv4_downlink_process(struct rte_mbuf *packet) {
     packdev_ipv4_print_addr(rte_be_to_cpu_32(ipv4_hdr->src_addr));
     RTE_LOG(DEBUG, USER1, "IPv4 dst address\n");
     packdev_ipv4_print_addr(rte_be_to_cpu_32(ipv4_hdr->dst_addr));
+    RTE_LOG(DEBUG, USER1, "IPv4 total length (%u)\n", rte_be_to_cpu_16(ipv4_hdr->total_length));
     //rte_pktmbuf_dump(stdout, packet, packet->data_len);
 
+    packdev_l3_if_t *l3_if =
+        packdev_l3_config_get_using_ipv4_addr(rte_be_to_cpu_32(ipv4_hdr->dst_addr));
+    if (l3_if == NULL) {
+        RTE_LOG(NOTICE, USER1, "IPv4: Unable to find L3 interface for the destination IPv4 address\n");
+        rte_pktmbuf_free(packet);
+        return;
+    }
+
+    packdev_metadata_t *metadata = PACKDEV_METADATA_PTR(packet);
+    metadata->input_l3_if_id = l3_if->if_id;
+    // Output L3 interface ID might change during packet processing
+    metadata->output_l3_if_id = l3_if->if_id;
+
     if (!is_checksum_correct(ipv4_hdr)) {
-        RTE_LOG(NOTICE, USER1, "IPv4 checksum incorrect, dropping packet\n");
+        RTE_LOG(NOTICE, USER1, "IPv4: checksum incorrect, dropping packet\n");
+        rte_pktmbuf_free(packet);
         return;
     }
 
     // TODO: No reassembly on inner packets yet.
-    packdev_metadata_t *metadata = PACKDEV_METADATA_PTR(packet);
     if (metadata->inner_packet == false &&
             (packet = fragment_process(packet, current_timestamp)) == NULL) {
-        RTE_LOG(DEBUG, USER1, "IPv4 reassembly not completed yet\n");
+        RTE_LOG(DEBUG, USER1, "IPv4: reassembly not completed yet\n");
         return;
+    } else {
+        set_l4hdr_checksum(packet);
+        set_ipv4_checksum(packet);
     }
 
     switch(ipv4_hdr->next_proto_id) {
     case IPPROTO_UDP:
+        // TODO: Handle UDP sessions
         RTE_LOG(INFO, USER1, "UDP packet received!\n");
-        packdev_udp_process(packet);
+        struct udp_hdr *udp_hdr = MBUF_IPV4_UDP_HDR_PTR(packet);
+        RTE_LOG(DEBUG, USER1, "UDP: src_port=%u\n", rte_be_to_cpu_16(udp_hdr->src_port));
+        RTE_LOG(DEBUG, USER1, "UDP: dst_port=%u\n", rte_be_to_cpu_16(udp_hdr->dst_port));
+        RTE_LOG(DEBUG, USER1, "UDP: data length=%u\n", rte_be_to_cpu_16(udp_hdr->dgram_len));
+        //packdev_udp_process(packet);
+        ipv4_switch_packet(packet);
+        break;
+    case IPPROTO_TCP:
+        RTE_LOG(INFO, USER1, "TCP packet received!\n");
+        struct tcp_hdr *tcp_hdr = MBUF_IPV4_TCP_HDR_PTR(packet);
+        RTE_LOG(DEBUG, USER1, "TCP: src port: %u\n", rte_be_to_cpu_16(tcp_hdr->src_port));
+        RTE_LOG(DEBUG, USER1, "TCP: dst port: %u\n", rte_be_to_cpu_16(tcp_hdr->dst_port));
+        RTE_LOG(DEBUG, USER1, "TCP: sequence number: %u\n", rte_be_to_cpu_32(tcp_hdr->sent_seq));
+        ipv4_switch_packet(packet);
         break;
     case IPPROTO_ICMP:
         RTE_LOG(INFO, USER1, "ICMP packet received!\n");
-        struct icmp_hdr *icmp_hdr = (struct icmp_hdr*)(++ipv4_hdr);
+        struct icmp_hdr *icmp_hdr = MBUF_IPV4_ICMP_HDR_PTR(packet);
         RTE_LOG(DEBUG, USER1, "ICMP: type: %u\n", icmp_hdr->icmp_type);
         RTE_LOG(DEBUG, USER1, "ICMP: identity: %u\n", rte_be_to_cpu_16(icmp_hdr->icmp_ident));
+        RTE_LOG(DEBUG, USER1, "ICMP: checksum: 0x%x\n", rte_be_to_cpu_16(icmp_hdr->icmp_cksum));
         RTE_LOG(DEBUG, USER1, "ICMP: sequence number: %u\n", rte_be_to_cpu_16(icmp_hdr->icmp_seq_nb));
         ipv4_switch_packet(packet);
         break;
@@ -161,7 +339,7 @@ static void ipv4_downlink_process(struct rte_mbuf *packet) {
         }
         break;
     default:
-        RTE_LOG(INFO, USER1, "IPv4 next protocol ID 0x%x\n", ipv4_hdr->next_proto_id);
+        RTE_LOG(INFO, USER1, "IPv4: next protocol ID 0x%x\n", ipv4_hdr->next_proto_id);
         rte_pktmbuf_free(packet);
         break;
     };

@@ -30,7 +30,6 @@
 #define SA_CONFIG_FILE "packdev_sa.conf"
 
 struct rte_hash *global_sa_table;
-struct rte_hash_parameters sa_table_params;
 
 packdev_sa_t sas[MAX_NUM_OF_SAS];
 
@@ -164,6 +163,7 @@ static void setup_sa_config() {
 }
 
 void packdev_sa_config_init() {
+    struct rte_hash_parameters sa_table_params;
     memset(&sa_table_params, 0, sizeof(sa_table_params));
     sa_table_params.name = "packdev-sa";
     sa_table_params.entries = MAX_NUM_OF_SAS;

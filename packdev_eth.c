@@ -235,6 +235,10 @@ static void arp_process(
     }
     packdev_l2_if_t* l2_if = packdev_l2_config_get_using_vlan_port(vlan_tag, eth_port_id);
     if (l2_if != NULL) {
+        metadata->input_l2_if_id = l2_if->if_id;
+        // TODO: output l2_if might change during the course of packet processing
+        metadata->output_l2_if_id = l2_if->if_id;
+
         struct arp_hdr *arp_hdr = MBUF_ARP_HDR_PTR(packet);
         if (l2_if->attr.vlan_id != 0) {
             arp_hdr = MBUF_ARP_VLAN_HDR_PTR(packet);
