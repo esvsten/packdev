@@ -27,7 +27,7 @@
 #include <rte_debug.h>
 
 #include "packdev_eth.h"
-#include "packdev_acl.h"
+#include "packdev_ipv4_flow.h"
 #include "packdev_acl_config.h"
 #include "packdev_l3_config.h"
 #include "packdev_common.h"
@@ -42,7 +42,7 @@
 struct rte_ip_frag_tbl *global_frag_table;
 struct rte_ip_frag_death_row death_row;
 
-static uint16_t get_udptcp_checksum(
+static uint16_t calculate_l4_checksum(
         struct rte_mbuf *packet) {
     struct ipv4_hdr *ipv4_hdr = MBUF_IPV4_HDR_PTR(packet);
 
@@ -77,7 +77,7 @@ static void set_l4hdr_checksum(struct rte_mbuf *packet) {
         struct udp_hdr *udp_hdr = MBUF_IPV4_UDP_HDR_PTR(packet);
         //RTE_LOG(DEBUG, USER1, "old (0x%x), ", rte_be_to_cpu_16(udp_hdr->dgram_cksum));
         udp_hdr->dgram_cksum = 0;
-        udp_hdr->dgram_cksum = get_udptcp_checksum(packet);
+        udp_hdr->dgram_cksum = calculate_l4_checksum(packet);
         //RTE_LOG(DEBUG, USER1, "new (0x%x)\n", rte_be_to_cpu_16(udp_hdr->dgram_cksum));
         break;
     case IPPROTO_TCP:
@@ -85,7 +85,7 @@ static void set_l4hdr_checksum(struct rte_mbuf *packet) {
         struct tcp_hdr *tcp_hdr = MBUF_IPV4_TCP_HDR_PTR(packet);
         //RTE_LOG(DEBUG, USER1, "old (0x%x), ", rte_be_to_cpu_16(tcp_hdr->cksum));
         tcp_hdr->cksum = 0;
-        tcp_hdr->cksum = get_udptcp_checksum(packet);
+        tcp_hdr->cksum = calculate_l4_checksum(packet);
         //RTE_LOG(DEBUG, USER1, "new (0x%x)\n", rte_be_to_cpu_16(tcp_hdr->cksum));
         break;
     default:
@@ -305,12 +305,10 @@ static void ipv4_downlink_process(struct rte_mbuf *packet) {
     case IPPROTO_UDP:
         // TODO: Handle UDP sessions
         RTE_LOG(INFO, USER1, "UDP packet received!\n");
-        struct udp_hdr *udp_hdr = MBUF_IPV4_UDP_HDR_PTR(packet);
-        RTE_LOG(DEBUG, USER1, "UDP: src_port=%u\n", rte_be_to_cpu_16(udp_hdr->src_port));
-        RTE_LOG(DEBUG, USER1, "UDP: dst_port=%u\n", rte_be_to_cpu_16(udp_hdr->dst_port));
-        RTE_LOG(DEBUG, USER1, "UDP: data length=%u\n", rte_be_to_cpu_16(udp_hdr->dgram_len));
-        //packdev_udp_process(packet);
-        ipv4_switch_packet(packet);
+        packdev_udp_process(packet);
+        if (packet) {
+            ipv4_switch_packet(packet);
+        }
         break;
     case IPPROTO_TCP:
         RTE_LOG(INFO, USER1, "TCP packet received!\n");
@@ -352,7 +350,7 @@ void packdev_ipv4_process(struct rte_mbuf *packet) {
     packdev_metadata_t *metadata = PACKDEV_METADATA_PTR(packet);
     if (!metadata->inner_packet) {
         // TODO: split ingress/egress ACL rules
-        acl_result = packdev_acl_classify(packet);
+        acl_result = packdev_ipv4_flow_classify(PACKDEV_FLOW_TYPE_ACL, packet);
         RTE_LOG(DEBUG, USER1, "Results from ACL: %u\n", acl_result);
     }
 

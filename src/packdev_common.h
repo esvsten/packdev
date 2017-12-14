@@ -45,7 +45,9 @@ enum {
     MAX_NUM_NEXT_HOPS        = 256,
 
     MAX_ACL_CATEGORIES       = 1,
-    MAX_ACL_RULES            = 128,
+    MAX_NUM_ACLS             = 128,
+    MAX_NUM_POLICIES         = 128,
+    MAX_NUM_SESSIONS         = 128,
 
     MAX_NUM_FRAGMENTS        = 4,
     MAX_REASSEMBLY_FLOWS     = 8192,

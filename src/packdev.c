@@ -40,13 +40,13 @@
 #include <packdev_port.h>
 #include <packdev_eth.h>
 #include <packdev_nbr.h>
-#include <packdev_acl.h>
-#include <packdev_acl_config.h>
+#include <packdev_ipv4.h>
 #include <packdev_l2_config.h>
 #include <packdev_l3_config.h>
+#include <packdev_ipv4_flow.h>
+#include <packdev_acl_config.h>
 #include <packdev_spd_config.h>
 #include <packdev_sa_config.h>
-#include <packdev_ipv4.h>
 #include <packdev_session.h>
 
 static __attribute__((noreturn)) void packdev_lcore_main_loop(uint8_t lcore_id) {
@@ -71,10 +71,8 @@ static __attribute__((noreturn)) void packdev_lcore_main_loop(uint8_t lcore_id) 
     packdev_config_init();
     packdev_l2_config_init();
     packdev_l3_config_init();
-    packdev_acl_config_init();
-    packdev_spd_config_init(); /* only initialize after ACL */
+    packdev_ipv4_flow_init(); /* ACL, SPD and sessions */
     packdev_sa_config_init();
-    packdev_session_init();
 
     for (uint8_t port_id = 0; port_id < num_ports; port_id++) {
         if (rte_eth_dev_socket_id(port_id) > 0 &&
