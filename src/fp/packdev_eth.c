@@ -14,14 +14,16 @@
 #include <rte_arp.h>
 #include <rte_ether.h>
 
-#include "packdev_common.h"
-#include "packdev_config.h"
-#include "packdev_l2_config.h"
-#include "packdev_nbr.h"
-#include "packdev_packet.h"
-#include "packdev_eth.h"
-#include "packdev_ipv4.h"
-#include "packdev_port.h"
+#include "sys/packdev_common.h"
+#include "sys/packdev_config.h"
+#include "sys/packdev_packet.h"
+#include "sys/packdev_port.h"
+
+#include "cp/packdev_l2_config.h"
+
+#include "fp/packdev_nbr.h"
+#include "fp/packdev_eth.h"
+#include "fp/packdev_ipv4.h"
 
 static void arp_build_request(
         struct rte_mbuf *original_packet,
@@ -166,6 +168,7 @@ static void packdev_eth_egress_build(
                 rte_be_to_cpu_32(ipv4_hdr->dst_addr),
                 empty_mac_addr.addr_bytes,
                 PACKDEV_ORIGIN_FP);
+        memcpy(eth_hdr->s_addr.addr_bytes, l2_if->attr.mac_addr, sizeof(l2_if->attr.mac_addr));
         arp_build_request(packet, l2_if, rte_be_to_cpu_32(ipv4_hdr->src_addr));
     } else if (nbr->state != PACKDEV_ARP_VALID) {
             RTE_LOG(DEBUG, USER1, "ETH: ARP still incomplete, silently drop packet!!!\n");

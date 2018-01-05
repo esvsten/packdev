@@ -3,6 +3,8 @@
 
 #include <rte_mbuf.h>
 
+void packdev_esp_build(struct rte_mbuf *packet);
+
 void packdev_esp_process(struct rte_mbuf *packet);
 
 #endif /* PACKDEV_ESP_H_ */

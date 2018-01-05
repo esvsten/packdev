@@ -3,8 +3,6 @@
 
 #include <rte_mbuf.h>
 
-#include "packdev_session.h"
-
 void packdev_udp_process(struct rte_mbuf *packet);
 
 #endif /* PACKDEV_UDP_H_ */

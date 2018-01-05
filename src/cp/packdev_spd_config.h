@@ -10,6 +10,12 @@ typedef enum {
     PACKDEV_SPD_MAX
 } packdev_spd_result_t;
 
+typedef struct {
+    uint32_t             policy_id;
+    uint32_t             sa_id;
+    packdev_spd_result_t action;
+} packdev_policy_t;
+
 static inline packdev_spd_result_t packdev_spd_get_action(const char *action_string) {
     if (strncmp("PROTECT", action_string, strlen("PROTECT")) == 0) {
         return PACKDEV_SPD_PROTECT;
@@ -23,5 +29,7 @@ static inline packdev_spd_result_t packdev_spd_get_action(const char *action_str
 }
 
 struct rte_acl_ctx* packdev_spd_config_get_context();
+
+packdev_policy_t* packdev_spd_config_get(uint32_t policy_id);
 
 #endif /* PACKDEV_SPD_CONFIG_H_ */

@@ -7,7 +7,15 @@
 #include <rte_crypto_sym.h>
 #include <rte_cryptodev.h>
 
+#include "sys/packdev_crypto.h"
+
 #define SA_TABLE_IV 255
+
+typedef enum {
+    PACKDEV_SA_IN,
+    PACKDEV_SA_OUT,
+    PACKDEV_SA_MAX
+} packdev_sa_direction_t;
 
 typedef enum {
     PACKDEV_ENCR_NULL          = RTE_CRYPTO_CIPHER_NULL,
@@ -38,11 +46,17 @@ struct sa_config_t {
 
 typedef struct {
     uint32_t sa_id;
+    packdev_sa_direction_t direction;
+
     uint32_t iv_length;
     uint32_t digest_length;
+    uint32_t block_size;
 
     struct sa_attr_t attr;
+
+    packdev_crypto_dev_t *crypto_dev;
     struct rte_cryptodev_sym_session *session;
+    uint32_t sequence_num;
 } packdev_sa_t;
 
 

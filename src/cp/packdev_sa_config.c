@@ -23,9 +23,10 @@
 #include <rte_crypto_sym.h>
 #include <rte_cryptodev.h>
 
-#include "packdev_common.h"
-#include "packdev_crypto.h"
-#include "packdev_sa_config.h"
+#include "sys/packdev_common.h"
+#include "sys/packdev_crypto.h"
+
+#include "cp/packdev_sa_config.h"
 
 #define SA_CONFIG_FILE "packdev_sa.conf"
 
@@ -51,8 +52,6 @@ static void add_sa_session(
             cipher_xform.cipher.key.length);
     cipher_xform.cipher.iv.offset = SYM_IV_OFFSET;
     cipher_xform.cipher.iv.length = sas[sa_id].iv_length;
-    cipher_xform.cipher.op = RTE_CRYPTO_CIPHER_OP_DECRYPT;
-    cipher_xform.next = NULL;
 
     memset(&auth_xform, 0, sizeof(auth_xform));
     auth_xform.type = RTE_CRYPTO_SYM_XFORM_AUTH;
@@ -65,15 +64,30 @@ static void add_sa_session(
             config->auth_key,
             auth_xform.auth.key.length);
     auth_xform.auth.digest_length = sas[sa_id].digest_length;
-    auth_xform.auth.op = RTE_CRYPTO_AUTH_OP_VERIFY;
-    auth_xform.next = &cipher_xform;
 
     // for decryption, first perform auth, then decryption
-    init_xform = &auth_xform;
+    if (sas[sa_id].direction == PACKDEV_SA_IN) {
+        cipher_xform.cipher.op = RTE_CRYPTO_CIPHER_OP_DECRYPT;
+        cipher_xform.next = NULL;
+
+        auth_xform.auth.op = RTE_CRYPTO_AUTH_OP_VERIFY;
+        auth_xform.next = &cipher_xform;
+
+        init_xform = &auth_xform;
+    } else {
+        cipher_xform.cipher.op = RTE_CRYPTO_CIPHER_OP_ENCRYPT;
+        cipher_xform.next = &auth_xform;
+
+        auth_xform.auth.op = RTE_CRYPTO_AUTH_OP_GENERATE;
+        auth_xform.next = NULL;
+
+        init_xform = &cipher_xform;
+    }
 
     /* Create crypto session and initialize it for the crypto device. */
     packdev_crypto_dev_t* crypto_dev = packdev_crypto_get_device();
-    sas[sa_id].session= rte_cryptodev_sym_session_create(crypto_dev->session_pool);
+    sas[sa_id].crypto_dev = crypto_dev;
+    sas[sa_id].session = rte_cryptodev_sym_session_create(crypto_dev->session_pool);
     if (sas[sa_id].session == NULL) {
         rte_exit(EXIT_FAILURE,
                 "SA: Symmetric session could not be created\n");
@@ -104,6 +118,7 @@ static void add_sa_session(
 static void add_sa(
         uint32_t sa_id,
         uint32_t spi,
+        packdev_sa_direction_t direction,
         packdev_encr_t encr_alg,
         char *encr_key,
         packdev_auth_t auth_alg,
@@ -115,8 +130,10 @@ static void add_sa(
     sas[sa_id].attr.local_addr = local_addr;
     sas[sa_id].attr.remote_addr = remote_addr;
     sas[sa_id].sa_id = sa_id;
+    sas[sa_id].direction = direction;
     sas[sa_id].iv_length = 16;
     sas[sa_id].digest_length = 12;
+    sas[sa_id].block_size = 16;
 
     struct sa_config_t sa_config;
     sa_config.encr_algorithm = encr_alg;
@@ -139,6 +156,11 @@ static void setup_sa_config() {
     for (guint index = 0; index < num_sas; index++) {
          gint sa_id = g_key_file_get_integer(gkf, sas[index], "sa_id", &error);
          gint spi = g_key_file_get_integer(gkf, sas[index], "spi", &error);
+         packdev_sa_direction_t direction = PACKDEV_SA_IN;
+         gchar* dir = g_key_file_get_string(gkf, sas[index], "direction", &error);
+         if (strcmp(dir, "OUT") == 0) {
+             direction = PACKDEV_SA_OUT;
+         }
          packdev_encr_t encr_alg = PACKDEV_ENCR_NULL;
          gchar* alg = g_key_file_get_string(gkf, sas[index], "encr_alg", &error);
          if (strcmp(alg, "AES_128_CBC") == 0) {
@@ -157,8 +179,8 @@ static void setup_sa_config() {
          gint remote_addr;
          inet_pton(AF_INET, g_key_file_get_string(gkf, sas[index], "remote_addr", &error),
                      &remote_addr);
-         add_sa(sa_id, spi, encr_alg, encr_key, auth_alg, auth_key,
-                 rte_cpu_to_be_32(local_addr), rte_cpu_to_be_32(remote_addr));
+         add_sa(sa_id, spi, direction, encr_alg, encr_key, auth_alg, auth_key,
+                 rte_be_to_cpu_32(local_addr), rte_be_to_cpu_32(remote_addr));
     }
 }
 

@@ -17,8 +17,8 @@
 #include <rte_ether.h>
 #include <rte_debug.h>
 
-#include "packdev_common.h"
-#include "packdev_port.h"
+#include "sys/packdev_common.h"
+#include "sys/packdev_port.h"
 
 #define ETH_PORT 1
 #define VETH_PORT 2

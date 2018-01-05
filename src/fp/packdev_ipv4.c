@@ -26,18 +26,19 @@
 #include <rte_ether.h>
 #include <rte_debug.h>
 
-#include "packdev_eth.h"
-#include "packdev_ipv4_flow.h"
-#include "packdev_acl_config.h"
-#include "packdev_l3_config.h"
-#include "packdev_common.h"
-#include "packdev_config.h"
-#include "packdev_esp.h"
-#include "packdev_udp.h"
-#include "packdev_packet.h"
-#include "packdev_port.h"
+#include "sys/packdev_common.h"
+#include "sys/packdev_config.h"
+#include "sys/packdev_packet.h"
+#include "sys/packdev_port.h"
 
-#include "packdev_ipv4.h"
+#include "cp/packdev_acl_config.h"
+#include "cp/packdev_ipv4_flow.h"
+#include "cp/packdev_l3_config.h"
+
+#include "fp/packdev_eth.h"
+#include "fp/packdev_esp.h"
+#include "fp/packdev_udp.h"
+#include "fp/packdev_ipv4.h"
 
 struct rte_ip_frag_tbl *global_frag_table;
 struct rte_ip_frag_death_row death_row;
@@ -215,7 +216,6 @@ static void ipv4_uplink_process(struct rte_mbuf *packet) {
         return;
     }
 
-    // TODO: Handle fragmentation
     struct rte_mbuf *fragments[MAX_NUM_FRAGMENTS];
     int32_t num_fragments = 0;
     if (packet->pkt_len > l3_if->attr.mtu) {
@@ -251,13 +251,20 @@ static void ipv4_uplink_process(struct rte_mbuf *packet) {
 
         for (uint8_t frag_index = 0; frag_index < num_fragments; ++frag_index) {
             PACKDEV_METADATA_COPY(fragments[frag_index], packet);
+            packdev_metadata_t *fragment_metadata = PACKDEV_METADATA_PTR(fragments[frag_index]);
             set_ipv4_checksum(fragments[frag_index]);
-            packdev_eth_build(fragments[frag_index]);
+            packdev_esp_build(fragments[frag_index]);
+            if (!fragment_metadata->consumed) {
+                packdev_eth_build(fragments[frag_index]);
+            }
         }
         rte_pktmbuf_free(packet);
     } else {
         set_ipv4_checksum(packet);
-        packdev_eth_build(packet);
+        packdev_esp_build(packet);
+        if (!metadata->consumed) {
+            packdev_eth_build(packet);
+        }
     }
 }
 
@@ -297,16 +304,23 @@ static void ipv4_downlink_process(struct rte_mbuf *packet) {
         RTE_LOG(DEBUG, USER1, "IPv4: reassembly not completed yet\n");
         return;
     } else {
+        // Some PMDs do not support segmented buffers, try to linearize
+        // For e.g. openssl PMD
+        if (rte_pktmbuf_linearize(packet) < 0) {
+            RTE_LOG(NOTICE, USER1, "IPv4: Could not linearize segmented buffer\n");
+        }
         set_l4hdr_checksum(packet);
         set_ipv4_checksum(packet);
     }
 
     switch(ipv4_hdr->next_proto_id) {
     case IPPROTO_UDP:
-        // TODO: Handle UDP sessions
         RTE_LOG(INFO, USER1, "UDP packet received!\n");
         packdev_udp_process(packet);
-        if (packet) {
+        if (metadata->consumed) {
+            // TODO 2018-01-04: Free the packet after sending via fast path sockets
+            rte_pktmbuf_free(packet);
+        } else {
             ipv4_switch_packet(packet);
         }
         break;
@@ -367,7 +381,7 @@ void packdev_ipv4_process(struct rte_mbuf *packet) {
     case PACKDEV_ACL_DENY:
     default:
         RTE_LOG(INFO, USER1,
-                "ACL result is not accept, so dropping the packet\n");
+                "ACL result is deny, so dropping the packet\n");
         rte_pktmbuf_free(packet);
         break;
     };

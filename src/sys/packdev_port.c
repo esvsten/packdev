@@ -16,9 +16,10 @@
 #include <rte_ether.h>
 #include <rte_log.h>
 
-#include "packdev_common.h"
-#include "packdev_eth.h"
-#include "packdev_port.h"
+#include "fp/packdev_eth.h"
+
+#include "sys/packdev_common.h"
+#include "sys/packdev_port.h"
 
 static packdev_port_t port_data[MAX_NUM_OF_PORTS];
 static struct rte_mempool* tx_direct_mp = NULL;
@@ -72,7 +73,8 @@ static inline int port_init(uint8_t port_id)
                 port->num_rx_mbufs,
                 MBUF_RX_CACHE_SIZE,
                 DEFAULT_MBUF_PRIV_SIZE,
-                RTE_MBUF_DEFAULT_BUF_SIZE,
+                //RTE_MBUF_DEFAULT_BUF_SIZE,
+                9000,
                 rte_socket_id());
         if (port->rx_queue[queue_id].mempool == NULL) {
             rte_exit(EXIT_FAILURE, "Cannot create rx mbuf pool\n");

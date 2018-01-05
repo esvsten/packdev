@@ -9,13 +9,16 @@
 #include <rte_ether.h>
 #include <rte_ip.h>
 
-#include "packdev_common.h"
-#include "packdev_ipv4_flow.h"
-#include "packdev_acl_config.h"
-#include "packdev_spd_config.h"
-#include "packdev_session.h"
+#include "sys/packdev_common.h"
+
+#include "cp/packdev_ipv4_flow.h"
+#include "cp/packdev_acl_config.h"
+#include "cp/packdev_spd_config.h"
+#include "cp/packdev_session.h"
 
 #define FLOW_CONFIG_FILE "packdev_flow.conf"
+
+packdev_policy_t spd[MAX_NUM_POLICIES];
 
 static struct rte_acl_ctx *acl_context;
 static struct rte_acl_ctx *spd_context;
@@ -236,17 +239,24 @@ void packdev_ipv4_flow_init() {
                      dst_port_begin, dst_port_end);
              break;
          case PACKDEV_FLOW_TYPE_SPD:
-             flow_action = packdev_spd_get_action(action);
-             policies[num_policies++] = packdev_ipv4_flow_add_ipv4_rule(
-                     flow_action, priority,
-                     protocol, protocol_mask,
-                     rte_cpu_to_be_32(src_ip_addr_begin),
-                     rte_cpu_to_be_32(src_ip_addr_end),
-                     rte_cpu_to_be_32(dst_ip_addr_begin),
-                     rte_cpu_to_be_32(dst_ip_addr_end),
-                     src_port_begin, src_port_end,
-                     dst_port_begin, dst_port_end);
+         {
+             gint policy_id = g_key_file_get_integer(gkf, flows[index], "policy_id", &error);
+             if (policy_id > 0 && policy_id < MAX_NUM_POLICIES) {
+                 spd[policy_id].policy_id = policy_id;
+                 spd[policy_id].sa_id = g_key_file_get_integer(gkf, flows[index], "sa_id", &error);
+                 spd[policy_id].action = packdev_spd_get_action(action);
+                 policies[num_policies++] = packdev_ipv4_flow_add_ipv4_rule(
+                         policy_id, priority,
+                         protocol, protocol_mask,
+                         rte_cpu_to_be_32(src_ip_addr_begin),
+                         rte_cpu_to_be_32(src_ip_addr_end),
+                         rte_cpu_to_be_32(dst_ip_addr_begin),
+                         rte_cpu_to_be_32(dst_ip_addr_end),
+                         src_port_begin, src_port_end,
+                         dst_port_begin, dst_port_end);
+             }
              break;
+         }
          case PACKDEV_FLOW_TYPE_SESSION:
              flow_action = packdev_session_get_action(action);
              sessions[num_sessions++] = packdev_ipv4_flow_add_ipv4_rule(
@@ -330,4 +340,12 @@ uint32_t packdev_ipv4_flow_classify(
             MAX_ACL_CATEGORIES);
 
     return result;
+}
+
+packdev_policy_t* packdev_spd_config_get(uint32_t policy_id) {
+    if (policy_id > 0 && policy_id < MAX_NUM_POLICIES) {
+        return &spd[policy_id];
+    }
+
+    return NULL;
 }

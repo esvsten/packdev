@@ -18,15 +18,17 @@
 #include <rte_udp.h>
 #include <rte_common.h>
 
-#include "packdev_common.h"
-#include "packdev_eth.h"
-#include "packdev_ipv4_flow.h"
-#include "packdev_session.h"
-#include "packdev_packet.h"
-#include "packdev_udp.h"
+#include "sys/packdev_common.h"
+#include "sys/packdev_packet.h"
+
+#include "cp/packdev_ipv4_flow.h"
+#include "cp/packdev_session.h"
+
+#include "fp/packdev_eth.h"
+#include "fp/packdev_udp.h"
 
 void packdev_udp_process(struct rte_mbuf *packet) {
-    //packdev_metadata_t *metadata = PACKDEV_METADATA_PTR(packet);
+    packdev_metadata_t *metadata = PACKDEV_METADATA_PTR(packet);
     //struct ipv4_hdr *ipv4_hdr = MBUF_IPV4_HDR_PTR(packet);
     struct udp_hdr *udp_hdr = MBUF_IPV4_UDP_HDR_PTR(packet);
     RTE_LOG(DEBUG, USER1, "UDP: src_port=%u\n", rte_be_to_cpu_16(udp_hdr->src_port));
@@ -37,7 +39,7 @@ void packdev_udp_process(struct rte_mbuf *packet) {
     switch(session_result) {
     case PACKDEV_SESSION_SEND_TO_FP:
         RTE_LOG(DEBUG, USER1, "UDP: Send to FP for further processing\n");
-        rte_pktmbuf_free(packet);
+        metadata->consumed = true;
         break;
     case PACKDEV_SESSION_SEND_TO_CPU:
         RTE_LOG(DEBUG, USER1, "UDP: Send to IPv4 for further processing\n");
@@ -45,7 +47,7 @@ void packdev_udp_process(struct rte_mbuf *packet) {
     case PACKDEV_SESSION_NO_MATCH:
     default:
         RTE_LOG(INFO, USER1, "UDP: No match found, dropping the packet!!!\n");
-        rte_pktmbuf_free(packet);
+        metadata->consumed = true;
         break;
     };
 }

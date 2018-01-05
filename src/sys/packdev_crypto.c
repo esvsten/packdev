@@ -21,8 +21,8 @@
 #include <rte_cryptodev.h>
 #include <rte_common.h>
 
-#include "packdev_common.h"
-#include "packdev_crypto.h"
+#include "sys/packdev_common.h"
+#include "sys/packdev_crypto.h"
 
 packdev_crypto_dev_t global_crypto_dev;
 

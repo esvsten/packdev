@@ -7,9 +7,10 @@
 #include <rte_ether.h>
 #include <rte_ethdev.h>
 
-#include "packdev_common.h"
-#include "packdev_config.h"
-#include "packdev_l2_config.h"
+#include "sys/packdev_common.h"
+#include "sys/packdev_config.h"
+
+#include "cp/packdev_l2_config.h"
 
 #define L2_CONFIG_FILE "packdev_l2.conf"
 

@@ -11,10 +11,12 @@
 #include <rte_ether.h>
 #include <rte_ethdev.h>
 
-#include "packdev_common.h"
-#include "packdev_config.h"
-#include "packdev_l3_config.h"
-#include "packdev_ipv4.h"
+#include "sys/packdev_common.h"
+#include "sys/packdev_config.h"
+
+#include "fp/packdev_ipv4.h"
+
+#include "cp/packdev_l3_config.h"
 
 #define L3_CONFIG_FILE "packdev_l3.conf"
 #define ROUTE_CONFIG_FILE "packdev_route.conf"

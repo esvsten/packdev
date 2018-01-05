@@ -33,21 +33,23 @@
 #include <rte_ether.h>
 #include <rte_debug.h>
 
-#include <packdev_common.h>
-#include "packdev_config.h"
-#include <packdev_packet.h>
-#include <packdev_crypto.h>
-#include <packdev_port.h>
-#include <packdev_eth.h>
-#include <packdev_nbr.h>
-#include <packdev_ipv4.h>
-#include <packdev_l2_config.h>
-#include <packdev_l3_config.h>
-#include <packdev_ipv4_flow.h>
-#include <packdev_acl_config.h>
-#include <packdev_spd_config.h>
-#include <packdev_sa_config.h>
-#include <packdev_session.h>
+#include <sys/packdev_common.h>
+#include <sys/packdev_config.h>
+#include <sys/packdev_packet.h>
+#include <sys/packdev_crypto.h>
+#include <sys/packdev_port.h>
+
+#include <fp/packdev_eth.h>
+#include <fp/packdev_nbr.h>
+#include <fp/packdev_ipv4.h>
+
+#include <cp/packdev_l2_config.h>
+#include <cp/packdev_l3_config.h>
+#include <cp/packdev_ipv4_flow.h>
+#include <cp/packdev_acl_config.h>
+#include <cp/packdev_spd_config.h>
+#include <cp/packdev_sa_config.h>
+#include <cp/packdev_session.h>
 
 static __attribute__((noreturn)) void packdev_lcore_main_loop(uint8_t lcore_id) {
     (void)lcore_id;

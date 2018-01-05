@@ -19,11 +19,12 @@
 #include <rte_ether.h>
 #include <rte_debug.h>
 
-#include "packdev_common.h"
-#include "packdev_config.h"
-#include "packdev_packet.h"
-#include "packdev_port.h"
-#include "packdev_eth.h"
+#include "fp/packdev_eth.h"
+
+#include "sys/packdev_common.h"
+#include "sys/packdev_config.h"
+#include "sys/packdev_packet.h"
+#include "sys/packdev_port.h"
 
 static void packdev_packet_classify(
         struct rte_mbuf *packet,
@@ -45,6 +46,7 @@ static void packdev_packet_classify(
         metadata->direction = PACKDEV_EGRESS;
     }
     metadata->inner_packet = false;
+    metadata->consumed = false;
 
     packdev_eth_process(packet);
 

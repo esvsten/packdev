@@ -49,6 +49,7 @@ enum {
     MAX_NUM_POLICIES         = 128,
     MAX_NUM_SESSIONS         = 128,
 
+    DEF_IPV4_TTL             = 64,
     MAX_NUM_FRAGMENTS        = 4,
     MAX_REASSEMBLY_FLOWS     = 8192,
     MAX_REASSEMBLY_FRAGMENTS = 4,
@@ -95,6 +96,7 @@ typedef struct {
     uint16_t origin;
     uint16_t inner_packet;
     uint16_t direction;
+    uint16_t consumed;
     uint8_t src_mac_addr[8];
     uint8_t input_l2_if_id;
     uint8_t input_l3_if_id;

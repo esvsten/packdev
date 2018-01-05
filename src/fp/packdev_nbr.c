@@ -6,11 +6,12 @@
 #include <rte_mbuf.h>
 #include <rte_ether.h>
 
-#include "packdev_common.h"
-#include "packdev_config.h"
-#include "packdev_nbr.h"
-#include "packdev_eth.h"
-#include "packdev_ipv4.h"
+#include "sys/packdev_common.h"
+#include "sys/packdev_config.h"
+
+#include "fp/packdev_nbr.h"
+#include "fp/packdev_eth.h"
+#include "fp/packdev_ipv4.h"
 
 struct rte_hash *global_nbr_table;
 struct rte_hash_parameters nbr_table_params;
