@@ -146,6 +146,9 @@ static struct rte_mbuf* fragment_process(
     if (reassembled_packet != packet) {
         packet = reassembled_packet;
         RTE_LOG(INFO, USER1, "IPv4: reassembly successful!!\n");
+        ipv4_hdr = MBUF_IPV4_HDR_PTR(packet);
+        RTE_LOG(DEBUG, USER1, "IPv4 reassembled length (%u)\n",
+                rte_be_to_cpu_16(ipv4_hdr->total_length));
         //rte_pktmbuf_dump(stdout, packet, packet->data_len);
         return packet;
     }
@@ -250,12 +253,18 @@ static void ipv4_uplink_process(struct rte_mbuf *packet) {
         }
 
         for (uint8_t frag_index = 0; frag_index < num_fragments; ++frag_index) {
-            PACKDEV_METADATA_COPY(fragments[frag_index], packet);
-            packdev_metadata_t *fragment_metadata = PACKDEV_METADATA_PTR(fragments[frag_index]);
-            set_ipv4_checksum(fragments[frag_index]);
-            packdev_esp_build(fragments[frag_index]);
+            struct rte_mbuf *fragment = fragments[frag_index];
+            PACKDEV_METADATA_COPY(fragment, packet);
+            packdev_metadata_t *fragment_metadata = PACKDEV_METADATA_PTR(fragment);
+            set_ipv4_checksum(fragment);
+
+            ipv4_hdr = MBUF_IPV4_HDR_PTR(fragment);
+            RTE_LOG(DEBUG, USER1, "IPv4 fragment length (%u)\n",
+                    rte_be_to_cpu_16(ipv4_hdr->total_length));
+
+            packdev_esp_build(fragment);
             if (!fragment_metadata->consumed) {
-                packdev_eth_build(fragments[frag_index]);
+                packdev_eth_build(fragment);
             }
         }
         rte_pktmbuf_free(packet);
@@ -278,6 +287,14 @@ static void ipv4_downlink_process(struct rte_mbuf *packet) {
     packdev_ipv4_print_addr(rte_be_to_cpu_32(ipv4_hdr->dst_addr));
     RTE_LOG(DEBUG, USER1, "IPv4 total length (%u)\n", rte_be_to_cpu_16(ipv4_hdr->total_length));
     //rte_pktmbuf_dump(stdout, packet, packet->data_len);
+
+    // Trim ethernet padding bytes
+    // TODO 2018-01-07: Move this logic to ethernet module
+    uint32_t ipv4_length = rte_be_to_cpu_16(ipv4_hdr->total_length);
+    if (rte_pktmbuf_pkt_len(packet) > ipv4_length) {
+        rte_pktmbuf_trim(packet,
+                rte_pktmbuf_pkt_len(packet) - ipv4_length);
+    }
 
     packdev_l3_if_t *l3_if =
         packdev_l3_config_get_using_ipv4_addr(rte_be_to_cpu_32(ipv4_hdr->dst_addr));
@@ -309,6 +326,7 @@ static void ipv4_downlink_process(struct rte_mbuf *packet) {
         if (rte_pktmbuf_linearize(packet) < 0) {
             RTE_LOG(NOTICE, USER1, "IPv4: Could not linearize segmented buffer\n");
         }
+
         set_l4hdr_checksum(packet);
         set_ipv4_checksum(packet);
     }

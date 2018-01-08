@@ -31,6 +31,8 @@ enum {
     MAX_TX_MBUFS             = (DEFAULT_TX_DESC * 4),
     MBUF_TX_CACHE_SIZE       = (MAX_TX_MBUFS / 8),
 
+    MBUF_JUMBO_FRAME_SIZE    = 9000,
+
     NUM_RX_QUEUES_PER_PORT   = 1,    /**< Number of rx cores per port. */
     NUM_TX_QUEUES_PER_PORT   = 1,    /**< Number of tx cores per port. */
 

@@ -74,7 +74,7 @@ static inline int port_init(uint8_t port_id)
                 MBUF_RX_CACHE_SIZE,
                 DEFAULT_MBUF_PRIV_SIZE,
                 //RTE_MBUF_DEFAULT_BUF_SIZE,
-                9000,
+                MBUF_JUMBO_FRAME_SIZE,
                 rte_socket_id());
         if (port->rx_queue[queue_id].mempool == NULL) {
             rte_exit(EXIT_FAILURE, "Cannot create rx mbuf pool\n");
@@ -142,7 +142,8 @@ void packdev_port_init()
             MAX_TX_MBUFS,
             MBUF_TX_CACHE_SIZE,
             DEFAULT_MBUF_PRIV_SIZE,
-            RTE_MBUF_DEFAULT_BUF_SIZE,
+            //RTE_MBUF_DEFAULT_BUF_SIZE,
+            MBUF_JUMBO_FRAME_SIZE,
             rte_socket_id());
     if (tx_direct_mp == NULL) {
         rte_exit(EXIT_FAILURE, "Cannot create direct tx mbuf pool\n");
@@ -153,7 +154,8 @@ void packdev_port_init()
             MAX_TX_MBUFS,
             MBUF_TX_CACHE_SIZE,
             DEFAULT_MBUF_PRIV_SIZE,
-            RTE_MBUF_DEFAULT_BUF_SIZE,
+            //RTE_MBUF_DEFAULT_BUF_SIZE,
+            MBUF_JUMBO_FRAME_SIZE,
             rte_socket_id());
     if (tx_indirect_mp == NULL) {
         rte_exit(EXIT_FAILURE, "Cannot create indirect tx mbuf pool\n");

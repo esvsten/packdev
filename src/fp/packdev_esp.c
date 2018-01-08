@@ -109,7 +109,6 @@ static bool esp_enqueue_crypto_operation(
         struct rte_mbuf *packet,
         packdev_sa_t *sa) {
     packdev_crypto_dev_t *crypto_dev = sa->crypto_dev;
-    uint16_t num_crypto_ops = 1;
     struct rte_crypto_op *crypto_op = rte_crypto_op_alloc(
             crypto_dev->operation_pool,
             RTE_CRYPTO_OP_TYPE_SYMMETRIC);
@@ -180,8 +179,9 @@ static bool esp_enqueue_crypto_operation(
 #endif
 
     crypto_op->sym->m_src = packet;
-    crypto_op->sym->m_dst = NULL;
+    //crypto_op->sym->m_dst = packet;
 
+    uint16_t num_crypto_ops = 1;
     uint16_t enq_result = rte_cryptodev_enqueue_burst(
             crypto_dev->id,
             crypto_dev->qp_id,
