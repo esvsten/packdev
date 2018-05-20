@@ -24,7 +24,8 @@ LT_INIT([])
 # Add glib flags
 ##########################################################################
 PKG_CHECK_MODULES([glib], [glib-2.0 >= 2.2.0],
-  [LIBS="$LIBS $glib_LIBS" CFLAGS="$CFLAGS $glib_CFLAGS"],
+  [ AM_LDFLAGS="$AM_LDFLAGS $glib_LIBS" 
+    AM_CFLAGS="$AM_CFLAGS $glib_CFLAGS"],
   AC_MSG_ERROR(Cannot find glib-2.0, check PKG_CONFIG_PATH))
 
 ##########################################################################
@@ -32,15 +33,16 @@ PKG_CHECK_MODULES([glib], [glib-2.0 >= 2.2.0],
 ##########################################################################
 AC_ARG_WITH([numa],
     AC_HELP_STRING([--with-numa=DIR path to external libs and headers]),
-    [ NUMA_INSTALL_PATH=$withval 
-      substitute_numa_flags="yes"],
+    [ substitute_numa_flags="yes"],
     [])
-AC_SUBST(NUMA_INSTALL_PATH)
 
 if test "x$substitute_numa_flags" = "xyes"; then
     numa_CFLAGS="-I${with_numa}/include"
     numa_LIBS="-L${with_numa}/lib -lnuma"
 fi
+
+AM_CFLAGS="${AM_CFLAGS} ${numa_CFLAGS}" 
+AM_LDFLAGS="${AM_LDFLAGS} ${numa_LIBS}" 
 
 ##########################################################################
 # Set DPDK install path
@@ -48,34 +50,34 @@ fi
 AC_ARG_WITH([dpdk],
     AC_HELP_STRING([--with-dpdk=DIR path to external libs and headers]),
     [ DPDK_INSTALL_PATH=$withval 
-      search_dpdk="yes"],
+      substitute_dpdk_flags="yes"],
     [])
 AC_SUBST(DPDK_INSTALL_PATH)
 
-libdpdk_synthetic_cflags=""
-libdpdk_synthetic_libs="-ldpdk"
-
-if test "x$search_dpdk" = "xyes"; then
-    if test -r "${with_dpdk}/include/rte_eal.h"; then
-        libdpdk_synthetic_cflags="-I${with_dpdk}/include"
-        libdpdk_synthetic_libs="-L${with_dpdk}/lib -ldpdk"
-        found_dpdk_includes="yes"
-    else
-        AC_MSG_ERROR([${with_dpdk}/include/rte_eal.h not found. Please check libdpdk prefix])
-    fi
-
-    AC_MSG_CHECKING([for DPDK include files])
-    AC_MSG_RESULT([$found_dpdk_includes])
+if test "x$substitute_dpdk_flags" = "xyes"; then
+    dpdk_CFLAGS="-I${with_dpdk}/include"
+    dpdk_LIBS="-L${with_dpdk}/lib -ldpdk"
 fi
 
-CFLAGS="${libdpdk_synthetic_cflags} ${numa_CFLAGS} ${CFLAGS}" 
-LDFLAGS="${libdpdk_synthetic_libs} ${numa_LIBS} ${LDFLAGS}" 
-LIBS="${libdpdk_synthetic_libs} ${numa_LIBS} ${LIBS}"
+AM_CFLAGS="${AM_CFLAGS} ${dpdk_CFLAGS}" 
+AM_LDFLAGS="${AM_LDFLAGS} ${dpdk_LIBS}" 
 
-AC_CHECK_LIB([dpdk], [rte_eal_init],
-[ AC_SUBST([dpdk_CFLAGS],[${libdpdk_synthetic_cflags}])
-  AC_SUBST([dpdk_LIBS],[${libdpdk_synthetic_libs}]) ],
-[AC_MSG_ERROR([cannot link with -ldpdk, install dpdk])])
+##########################################################################                                            
+# Check for DPDK availability                                                                                         
+##########################################################################                                            
+PREVIOUS_LDFLAGS=$LDFLAGS
+PREVIOUS_CFLAGS=$CFLAGS
+LDFLAGS="$AM_LDFLAGS $LDFLAGS"
+CFLAGS="$AM_CFLAGS $CFLAGS"
+
+AC_CHECK_HEADERS([rte_config.h], [],                                                                                  
+    [AC_MSG_FAILURE(["can't find DPDK headers"])])                                                                    
+                                                                                                                          
+AC_SEARCH_LIBS([rte_eal_init], [dpdk], [],                                                                            
+    [AC_MSG_ERROR([DPDK libraries required])]) 
+
+LDFLAGS=$PREVIOUS_LDFLAGS
+CFLAGS=$PREVIOUS_CFLAGS
 
 ##########################################################################
 # Enable/disable PACKDEV_DEBUG
@@ -94,7 +96,7 @@ PACKDEV_CFLAGS="$PACKDEV_CFLAGS -DPACKDEV_DEBUG=$PACKDEV_DEBUG"
 ##########################################################################
 # Default warning setup
 ##########################################################################
-PACKDEV_CFLAGS="$PACKDEV_CFLAGS -Wincompatible-pointer-types"
+PACKDEV_CFLAGS="$PACKDEV_CFLAGS -Wno-incompatible-pointer-types"
 
 # Extra flags for example to suppress certain warning types
 PACKDEV_CFLAGS="$PACKDEV_CFLAGS $PACKDEV_CFLAGS_EXTRA"
@@ -103,13 +105,8 @@ PACKDEV_CFLAGS="$PACKDEV_CFLAGS $PACKDEV_CFLAGS_EXTRA"
 # Distribute the modified flags to Makefiles
 ##########################################################################
 AM_CFLAGS="$AM_CFLAGS $PACKDEV_CFLAGS"
-AC_SUBST([LIBS])
-AC_SUBST([AM_CPPFLAGS])
-AC_SUBST([CPPFLAGS])
 AC_SUBST([AM_CFLAGS])
-AC_SUBST([CFLAGS])
 AC_SUBST([AM_LDFLAGS])
-AC_SUBST([LDFLAGS])
 
 
 # Specify output files
@@ -153,6 +150,8 @@ echo C compiler.................... : $CC
 echo C compiler flags.............. : $CFLAGS
 echo C++ compiler.................. : $CXX
 echo C++ compiler flags............ : $CXXFLAGS
+echo Automake CFLAGS............... : $AM_CFLAGS
+echo Automake LDFLAGS.............. : $AM_LDFLAGS
 echo Configure date................ : $BUILD_DATE
 echo Build architecture............ : $BUILD_ARCH
 echo Build host.................... : $BUILD_HOST

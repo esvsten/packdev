@@ -44,6 +44,3 @@ packdev_SOURCES += \
     sys/packdev_port.c \
     sys/packdev_crypto.c \
     sys/packdev_config.c
-
-packdev_SOURCES += \
-    src/platform.h
