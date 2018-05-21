@@ -16,8 +16,6 @@
 #include <rte_ether.h>
 #include <rte_log.h>
 
-#include "fp/packdev_eth.h"
-
 #include "sys/packdev_common.h"
 #include "sys/packdev_port.h"
 
@@ -200,5 +198,10 @@ void packdev_port_mac_addr_print(uint32_t port_id) {
     rte_eth_macaddr_get(port_id, &addr);
 
     RTE_LOG(DEBUG, USER1, "Port %u: \n", port_id);
-    packdev_eth_print_addr(addr);
+    RTE_LOG(DEBUG, USER1,
+            "MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
+            " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
+            addr.addr_bytes[0], addr.addr_bytes[1],
+            addr.addr_bytes[2], addr.addr_bytes[3],
+            addr.addr_bytes[4], addr.addr_bytes[5]);
 }

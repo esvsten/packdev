@@ -13,12 +13,12 @@ include_HEADERS += \
     fp/packdev_ipv4.h \
     fp/packdev_eth.h \
     fp/packdev_esp.h \
+    fp/packdev_packet.h \
     fp/packdev_udp.h \
     fp/packdev_nbr.h 
 
 include_HEADERS += \
     sys/packdev_config.h \
-    sys/packdev_packet.h \
     sys/packdev_port.h \
     sys/packdev_crypto.h \
     sys/packdev_common.h 
@@ -31,6 +31,7 @@ packdev_SOURCES += \
     fp/packdev_ipv4.c \
     fp/packdev_eth.c \
     fp/packdev_esp.c \
+    fp/packdev_packet.c \
     fp/packdev_nbr.c
 
 packdev_SOURCES += \
@@ -40,7 +41,6 @@ packdev_SOURCES += \
     cp/packdev_ipv4_flow.c
 
 packdev_SOURCES += \
-    sys/packdev_packet.c \
     sys/packdev_port.c \
     sys/packdev_crypto.c \
     sys/packdev_config.c

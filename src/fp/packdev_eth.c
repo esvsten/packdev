@@ -16,7 +16,6 @@
 
 #include "sys/packdev_common.h"
 #include "sys/packdev_config.h"
-#include "sys/packdev_packet.h"
 #include "sys/packdev_port.h"
 
 #include "cp/packdev_l2_config.h"
@@ -24,6 +23,7 @@
 #include "fp/packdev_nbr.h"
 #include "fp/packdev_eth.h"
 #include "fp/packdev_ipv4.h"
+#include "fp/packdev_packet.h"
 
 static void arp_build_request(
         struct rte_mbuf *original_packet,

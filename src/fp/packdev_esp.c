@@ -22,7 +22,6 @@
 #include <rte_hexdump.h>
 
 #include "sys/packdev_common.h"
-#include "sys/packdev_packet.h"
 #include "sys/packdev_port.h"
 
 #include "cp/packdev_ipv4_flow.h"

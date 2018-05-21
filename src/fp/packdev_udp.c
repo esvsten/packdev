@@ -19,7 +19,6 @@
 #include <rte_common.h>
 
 #include "sys/packdev_common.h"
-#include "sys/packdev_packet.h"
 
 #include "cp/packdev_ipv4_flow.h"
 #include "cp/packdev_session.h"

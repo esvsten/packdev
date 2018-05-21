@@ -28,7 +28,6 @@
 
 #include "sys/packdev_common.h"
 #include "sys/packdev_config.h"
-#include "sys/packdev_packet.h"
 #include "sys/packdev_port.h"
 
 #include "cp/packdev_acl_config.h"

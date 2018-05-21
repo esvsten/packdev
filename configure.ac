@@ -8,7 +8,7 @@ AC_CONFIG_MACRO_DIR(config)
 AC_CONFIG_HEADERS([packdev_config.h])
 AC_CONFIG_SRCDIR([src/packdev.c])
 
-AM_INIT_AUTOMAKE([subdir-objects])
+AM_INIT_AUTOMAKE()
 
 AC_SUBST(PACKAGE_VERSION)
 
@@ -157,6 +157,9 @@ echo Build architecture............ : $BUILD_ARCH
 echo Build host.................... : $BUILD_HOST
 echo Build user.................... : $USER
 echo Install dir................... : $prefix
+echo Static libraries.............. : $enable_static
+echo Shared libraries.............. : $enable_shared
+
 
 echo
 echo '##########################################################################'

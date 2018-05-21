@@ -19,12 +19,12 @@
 #include <rte_ether.h>
 #include <rte_debug.h>
 
-#include "fp/packdev_eth.h"
-
 #include "sys/packdev_common.h"
 #include "sys/packdev_config.h"
-#include "sys/packdev_packet.h"
 #include "sys/packdev_port.h"
+
+#include "fp/packdev_eth.h"
+#include "fp/packdev_packet.h"
 
 static void packdev_packet_classify(
         struct rte_mbuf *packet,

@@ -35,13 +35,13 @@
 
 #include <sys/packdev_common.h>
 #include <sys/packdev_config.h>
-#include <sys/packdev_packet.h>
 #include <sys/packdev_crypto.h>
 #include <sys/packdev_port.h>
 
 #include <fp/packdev_eth.h>
 #include <fp/packdev_nbr.h>
 #include <fp/packdev_ipv4.h>
+#include <fp/packdev_packet.h>
 
 #include <cp/packdev_l2_config.h>
 #include <cp/packdev_l3_config.h>
